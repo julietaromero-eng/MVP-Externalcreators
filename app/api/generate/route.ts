@@ -13,8 +13,8 @@ export async function POST(request: Request) {
     }
 
     const [instagramRaw, tiktokRaw] = await Promise.all([
-      instagramUrl ? scrapeInstagram(instagramUrl).catch(() => null) : null,
-      tiktokUrl ? scrapeTikTok(tiktokUrl).catch(() => null) : null,
+      instagramUrl ? scrapeInstagram(instagramUrl).catch((e) => { console.error("IG scrape error:", e?.message ?? e); return null; }) : null,
+      tiktokUrl ? scrapeTikTok(tiktokUrl).catch((e) => { console.error("TT scrape error:", e?.message ?? e); return null; }) : null,
     ]);
 
     if (!instagramRaw && !tiktokRaw) {

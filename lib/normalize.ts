@@ -3,7 +3,7 @@ import type { CreatorProfile, CreatorPost } from "./types";
 type RawData = Record<string, unknown>;
 
 function igEngagement(p: RawData): number {
-  return ((p.likesCount as number) ?? 0) + ((p.commentsCount as number) ?? 0) * 3;
+  return ((p.like_count as number) ?? 0) + ((p.comment_count as number) ?? 0) * 3;
 }
 
 function ttEngagement(v: RawData): number {
@@ -19,13 +19,21 @@ export function normalizeInstagram(raw: RawData): CreatorProfile {
 
   const sorted = [...rawPosts].sort((a, b) => igEngagement(b) - igEngagement(a));
 
-  const recentPosts: CreatorPost[] = sorted.slice(0, 12).map((p) => ({
-    thumbnailUrl: (p.displayUrl as string) ?? null,
-    postUrl: (p.url as string) ?? null,
-    likesCount: (p.likesCount as number) ?? 0,
-    commentsCount: (p.commentsCount as number) ?? 0,
-    caption: (p.caption as string) ?? "",
-  }));
+  const recentPosts: CreatorPost[] = sorted.slice(0, 12).map((p) => {
+    const isCarousel = (p.media_type as number) === 8;
+    const candidates = isCarousel
+      ? ((p.carousel_media as RawData[])?.[0]?.image_versions2 as RawData)?.candidates as RawData[]
+      : ((p.image_versions2 as RawData)?.candidates as RawData[]);
+    const thumbnailUrl = (candidates?.[0]?.url as string) ?? null;
+    const captionObj = p.caption as Record<string, unknown> | null;
+    return {
+      thumbnailUrl,
+      postUrl: null,
+      likesCount: (p.like_count as number) ?? 0,
+      commentsCount: (p.comment_count as number) ?? 0,
+      caption: (captionObj?.text as string) ?? "",
+    };
+  });
 
   return {
     platform: "instagram",
