@@ -8,30 +8,30 @@ export async function GET(request: Request) {
   const host = "instagram-best-experience.p.rapidapi.com";
   const headers = { "x-rapidapi-host": host, "x-rapidapi-key": key };
 
-  const candidates = [
-    `/user_profile_by_username?username=${encodeURIComponent(username)}`,
-    `/profile?username=${encodeURIComponent(username)}`,
-    `/v1/user_profile_by_username?username=${encodeURIComponent(username)}`,
-    `/user?username=${encodeURIComponent(username)}`,
-    `/user_by_username?username=${encodeURIComponent(username)}`,
-    `/v1/profile?username=${encodeURIComponent(username)}`,
-    `/username?username=${encodeURIComponent(username)}`,
-  ];
+  // Step 1: profile
+  const profileRes = await fetch(
+    `https://${host}/profile?username=${encodeURIComponent(username)}`,
+    { headers }
+  );
+  const profileText = await profileRes.text();
+  let profileJson: Record<string, unknown>;
+  try { profileJson = JSON.parse(profileText); } catch { return Response.json({ step: "profile_parse_error", raw: profileText.slice(0, 300) }); }
 
-  const results: Record<string, unknown>[] = [];
+  if (!profileRes.ok) return Response.json({ step: "profile_failed", status: profileRes.status, body: profileJson });
 
-  for (const path of candidates) {
-    try {
-      const res = await fetch(`https://${host}${path}`, { headers });
-      const text = await res.text();
-      let body: unknown;
-      try { body = JSON.parse(text); } catch { body = text.slice(0, 100); }
-      results.push({ path, status: res.status, ok: res.ok, body: res.ok ? "OK - has data" : body });
-      if (res.ok) break;
-    } catch (e) {
-      results.push({ path, error: String(e) });
-    }
-  }
+  // Find the user id field
+  const idField = profileJson.pk ?? profileJson.id ?? profileJson.user_id ?? profileJson.userId;
 
-  return Response.json({ results });
+  return Response.json({
+    step: "profile_ok",
+    status: profileRes.status,
+    topKeys: Object.keys(profileJson),
+    pk: profileJson.pk,
+    id: profileJson.id,
+    user_id: profileJson.user_id,
+    idField,
+    username: profileJson.username,
+    full_name: profileJson.full_name,
+    follower_count: profileJson.follower_count,
+  });
 }

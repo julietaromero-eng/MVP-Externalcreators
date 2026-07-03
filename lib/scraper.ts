@@ -18,7 +18,7 @@ export async function scrapeInstagram(url: string) {
   const username = extractIgUsername(url);
 
   const profileRes = await fetch(
-    `https://${host}/user_profile_by_username?username=${encodeURIComponent(username)}`,
+    `https://${host}/profile?username=${encodeURIComponent(username)}`,
     { headers }
   );
   if (!profileRes.ok) throw new Error(`Profile fetch failed: ${profileRes.status}`);
