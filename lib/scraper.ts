@@ -1,15 +1,13 @@
 import { ApifyClient } from "apify-client";
 
-const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
-
 export async function scrapeInstagram(url: string) {
-  // Normalize URL: ensure trailing slash for the actor
+  const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
   const normalized = url.endsWith("/") ? url : url + "/";
 
   const run = await client.actor("apify/instagram-profile-scraper").call({
     directUrls: [normalized],
     resultsType: "details",
-    resultsLimit: 30, // fetch 30 so we can pick the top by engagement
+    resultsLimit: 30,
   });
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
@@ -18,12 +16,12 @@ export async function scrapeInstagram(url: string) {
 }
 
 function extractTikTokUsername(url: string): string {
-  // Handles: https://www.tiktok.com/@username or https://tiktok.com/@username/...
   const match = url.match(/@([^/?#]+)/);
   return match ? match[1] : url;
 }
 
 export async function scrapeTikTok(url: string) {
+  const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
   const username = extractTikTokUsername(url);
 
   const run = await client.actor("clockworks/free-tiktok-scraper").call({

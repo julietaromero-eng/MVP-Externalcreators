@@ -1,11 +1,11 @@
 import OpenAI from "openai";
 import type { CreatorProfile, AIAnalysis } from "./types";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
 export async function generateCreatorAnalysis(
   profiles: CreatorProfile[]
 ): Promise<AIAnalysis> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
   const profileData = profiles.map((p) => ({
     platform: p.platform,
     username: p.username,
