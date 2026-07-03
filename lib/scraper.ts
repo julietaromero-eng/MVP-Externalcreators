@@ -4,7 +4,7 @@ export async function scrapeInstagram(url: string) {
   const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
   const normalized = url.endsWith("/") ? url : url + "/";
 
-  const run = await client.actor("apify/instagram-profile-scraper").call({
+  const run = await client.actor("apify/instagram-scraper").call({
     directUrls: [normalized],
     resultsType: "details",
     resultsLimit: 30,
