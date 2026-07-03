@@ -8,42 +8,30 @@ export async function GET(request: Request) {
   const host = "instagram-best-experience.p.rapidapi.com";
   const headers = { "x-rapidapi-host": host, "x-rapidapi-key": key };
 
-  try {
-    const profileRes = await fetch(
-      `https://${host}/user_profile_by_username?username=${encodeURIComponent(username)}`,
-      { headers }
-    );
-    const profileText = await profileRes.text();
-    let profileJson: unknown;
-    try { profileJson = JSON.parse(profileText); } catch { profileJson = profileText; }
+  const candidates = [
+    `/user_profile_by_username?username=${encodeURIComponent(username)}`,
+    `/profile?username=${encodeURIComponent(username)}`,
+    `/v1/user_profile_by_username?username=${encodeURIComponent(username)}`,
+    `/user?username=${encodeURIComponent(username)}`,
+    `/user_by_username?username=${encodeURIComponent(username)}`,
+    `/v1/profile?username=${encodeURIComponent(username)}`,
+    `/username?username=${encodeURIComponent(username)}`,
+  ];
 
-    if (!profileRes.ok) {
-      return Response.json({ step: "profile", status: profileRes.status, body: profileJson });
+  const results: Record<string, unknown>[] = [];
+
+  for (const path of candidates) {
+    try {
+      const res = await fetch(`https://${host}${path}`, { headers });
+      const text = await res.text();
+      let body: unknown;
+      try { body = JSON.parse(text); } catch { body = text.slice(0, 100); }
+      results.push({ path, status: res.status, ok: res.ok, body: res.ok ? "OK - has data" : body });
+      if (res.ok) break;
+    } catch (e) {
+      results.push({ path, error: String(e) });
     }
-
-    const profile = profileJson as Record<string, unknown>;
-    if (!profile.pk) {
-      return Response.json({ step: "profile_ok_no_pk", status: profileRes.status, body: profileJson });
-    }
-
-    const feedRes = await fetch(
-      `https://${host}/feed?user_id=${profile.pk}`,
-      { headers }
-    );
-    const feedText = await feedRes.text();
-    let feedJson: unknown;
-    try { feedJson = JSON.parse(feedText); } catch { feedJson = feedText; }
-
-    return Response.json({
-      step: "feed",
-      profileStatus: profileRes.status,
-      pk: profile.pk,
-      username: profile.username,
-      feedStatus: feedRes.status,
-      feedKeys: feedJson && typeof feedJson === "object" ? Object.keys(feedJson as object) : feedText.slice(0, 200),
-      itemsCount: (feedJson as Record<string, unknown[]>)?.items?.length ?? 0,
-    });
-  } catch (e) {
-    return Response.json({ error: String(e) }, { status: 500 });
   }
+
+  return Response.json({ results });
 }
