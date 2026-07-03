@@ -4,15 +4,25 @@ export async function scrapeInstagram(url: string) {
   const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
   const normalized = url.endsWith("/") ? url : url + "/";
 
-  const run = await client.actor("apify/instagram-scraper").call({
+  const run = await client.actor("apify/instagram-post-scraper").call({
     directUrls: [normalized],
-    resultsType: "details",
     resultsLimit: 30,
   });
 
   const { items } = await client.dataset(run.defaultDatasetId).listItems();
   if (!items.length) throw new Error("No Instagram data returned");
-  return items[0] as Record<string, unknown>;
+
+  const first = items[0] as Record<string, unknown>;
+  return {
+    username: first.ownerUsername ?? "",
+    fullName: first.ownerFullName ?? "",
+    biography: "",
+    followersCount: 0,
+    followingCount: 0,
+    postsCount: items.length,
+    profilePicUrl: null,
+    latestPosts: items,
+  } as Record<string, unknown>;
 }
 
 function extractTikTokUsername(url: string): string {
