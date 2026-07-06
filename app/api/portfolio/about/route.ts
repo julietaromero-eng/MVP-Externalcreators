@@ -6,8 +6,29 @@ export async function PATCH(request: Request) {
     const body = (await request.json()) as PortfolioAbout;
     const about = await saveAbout({
       bio: body.bio ?? "",
+      hobbiesAndPassions: body.hobbiesAndPassions ?? "",
+      industries: Array.isArray(body.industries) ? body.industries : [],
+      contentTypes: Array.isArray(body.contentTypes) ? body.contentTypes : [],
+      pronouns: body.pronouns ?? null,
+      age: body.age ?? null,
+      location: body.location ?? null,
+      languages: body.languages ?? "",
+      nationality: Array.isArray(body.nationality) ? body.nationality : [],
       contactEmail: body.contactEmail ?? null,
-      contactLinks: Array.isArray(body.contactLinks) ? body.contactLinks : [],
+      socialLinks: {
+        tiktok: body.socialLinks?.tiktok ?? "",
+        instagram: body.socialLinks?.instagram ?? "",
+        youtube: body.socialLinks?.youtube ?? "",
+        kwai: body.socialLinks?.kwai ?? "",
+        linkedin: body.socialLinks?.linkedin ?? "",
+        twitter: body.socialLinks?.twitter ?? "",
+        threads: body.socialLinks?.threads ?? "",
+        facebook: body.socialLinks?.facebook ?? "",
+        website: body.socialLinks?.website ?? "",
+      },
+      bookingLinks: {
+        calendly: body.bookingLinks?.calendly ?? "",
+      },
     });
     return Response.json(about);
   } catch (error) {

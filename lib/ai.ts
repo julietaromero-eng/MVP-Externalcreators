@@ -38,7 +38,8 @@ export async function generateCreatorAnalysis(
   "audience": "descripción corta de audiencia, ej: Mujeres 18-34",
   "primaryLanguage": "idioma en inglés, ej: Spanish",
   "tags": ["3-4 atributos, ej: Auténtico, Brand Safe, Alto Engagement"],
-  "topics": ["5-8 temas recurrentes en su contenido"]
+  "topics": ["5-8 temas recurrentes en su contenido"],
+  "hobbiesAndPassions": "1-2 oraciones sobre intereses/pasiones que se notan en su contenido público (ej: deportes, música, viajes). Inferí solo a partir del contenido visible, no inventes datos personales que no se puedan deducir del contenido."
 }
 
 Datos del creator:
@@ -57,5 +58,6 @@ ${JSON.stringify(profileData, null, 2)}`,
     primaryLanguage: raw.primaryLanguage ?? "",
     tags: raw.tags ?? [],
     topics: raw.topics ?? [],
+    hobbiesAndPassions: raw.hobbiesAndPassions ?? "",
   };
 }

@@ -6,11 +6,13 @@ import {
   LayoutDashboard, Bell, MessageSquare, Briefcase, Handshake,
   Megaphone, Images, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
-  Heart, MessageCircle, Eye, GripVertical, Plus,
+  Heart, MessageCircle, Eye, GripVertical, Globe, Video,
 } from "lucide-react";
-import { FaInstagram, FaTiktok } from "react-icons/fa6";
+import {
+  FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
+} from "react-icons/fa6";
 import { BrkawayLogo } from "@/lib/BrkawayLogo";
-import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, ContactLink, ProfileOverrides } from "@/lib/types";
+import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides } from "@/lib/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1079,6 +1081,87 @@ function PostLightbox({
 
 // ─── About Tab ───────────────────────────────────────────────────────────────
 
+const EMPTY_ABOUT: PortfolioAbout = {
+  bio: "",
+  hobbiesAndPassions: "",
+  industries: [],
+  contentTypes: [],
+  pronouns: null,
+  age: null,
+  location: null,
+  languages: "",
+  nationality: [],
+  contactEmail: null,
+  socialLinks: {
+    tiktok: "", instagram: "", youtube: "", kwai: "", linkedin: "",
+    twitter: "", threads: "", facebook: "", website: "",
+  },
+  bookingLinks: { calendly: "" },
+};
+
+const AGE_RANGES = ["13-17", "18-24", "25-34", "35-44", "45-54", "55+"];
+
+const SOCIAL_LINK_FIELDS: {
+  key: keyof SocialLinks;
+  label: string;
+  icon: React.ReactNode;
+  placeholder: string;
+}[] = [
+  { key: "tiktok", label: "TikTok URL", icon: <FaTiktok className="text-bk-text-primary" />, placeholder: "https://tiktok.com/@your-handle" },
+  { key: "instagram", label: "Instagram URL", icon: <FaInstagram className="text-[#E1306C]" />, placeholder: "https://instagram.com/your-handle" },
+  { key: "youtube", label: "Youtube URL", icon: <FaYoutube className="text-[#FF0000]" />, placeholder: "https://youtube.com/@your-handle" },
+  { key: "kwai", label: "Kwai URL", icon: <Video size={14} className="text-orange-500" />, placeholder: "kwai.com/@your-handle" },
+  { key: "linkedin", label: "LinkedIn URL", icon: <FaLinkedin className="text-[#0A66C2]" />, placeholder: "linkedin.com/in/your-handle" },
+  { key: "twitter", label: "Twitter URL", icon: <FaXTwitter className="text-bk-text-primary" />, placeholder: "twitter.com/your-handle" },
+  { key: "threads", label: "Threads URL", icon: <FaThreads className="text-bk-text-primary" />, placeholder: "threads.com/your-handle" },
+  { key: "facebook", label: "Facebook URL", icon: <FaFacebook className="text-[#1877F2]" />, placeholder: "facebook.com/your-handle" },
+  { key: "website", label: "Website URL", icon: <Globe size={14} className="text-bk-text-secondary" />, placeholder: "https://your-site.com" },
+];
+
+function TagInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string[];
+  onChange: (tags: string[]) => void;
+  placeholder: string;
+}) {
+  const [draft, setDraft] = useState("");
+
+  const addTag = () => {
+    const trimmed = draft.trim();
+    if (trimmed && !value.includes(trimmed)) onChange([...value, trimmed]);
+    setDraft("");
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 rounded-xl border border-bk-border focus-within:ring-2 focus-within:ring-bk-purple/30 focus-within:border-bk-purple transition-colors">
+      {value.map((tag) => (
+        <span key={tag} className="flex items-center gap-1 bg-bk-purple-light text-bk-purple text-xs font-medium rounded-full px-2.5 py-1">
+          {tag}
+          <button onClick={() => onChange(value.filter((t) => t !== tag))} className="hover:text-red-500">
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            addTag();
+          }
+        }}
+        onBlur={addTag}
+        placeholder={value.length === 0 ? placeholder : ""}
+        className="flex-1 min-w-[100px] text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none bg-transparent"
+      />
+    </div>
+  );
+}
+
 function AboutTab({
   about,
   onSave,
@@ -1087,133 +1170,313 @@ function AboutTab({
   onSave: (about: PortfolioAbout) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [bio, setBio] = useState("");
-  const [email, setEmail] = useState("");
-  const [links, setLinks] = useState<ContactLink[]>([]);
+  const [draft, setDraft] = useState<PortfolioAbout>(EMPTY_ABOUT);
   const [saving, setSaving] = useState(false);
 
   const startEditing = () => {
-    setBio(about?.bio ?? "");
-    setEmail(about?.contactEmail ?? "");
-    setLinks(about?.contactLinks ?? []);
+    setDraft(about ?? EMPTY_ABOUT);
     setEditing(true);
   };
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave({ bio, contactEmail: email || null, contactLinks: links.filter((l) => l.label && l.url) });
+      await onSave(draft);
       setEditing(false);
     } finally {
       setSaving(false);
     }
   };
 
+  const activeSocialLinks = SOCIAL_LINK_FIELDS.filter((f) => about?.socialLinks[f.key]);
+  const hasBooking = !!about?.bookingLinks.calendly;
+
   if (!editing) {
     return (
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-2xl bg-bk-bg border border-bk-border rounded-xl p-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <h2 className="font-bold text-bk-text-primary text-lg">About</h2>
-            <button
-              onClick={startEditing}
-              className="flex items-center gap-1.5 border border-bk-border rounded-lg px-3 py-1.5 text-xs text-bk-text-secondary hover:bg-bk-bg-light transition-colors"
-            >
-              <Pencil size={12} /> Edit
-            </button>
+      <div className="flex-1 overflow-y-auto p-8 space-y-6 max-w-3xl">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-bk-text-primary">About me</h2>
+          <button
+            onClick={startEditing}
+            className="flex items-center gap-1.5 border border-bk-border rounded-lg px-3 py-1.5 text-xs text-bk-text-secondary hover:bg-bk-bg-light transition-colors"
+          >
+            <Pencil size={12} /> Edit
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-4">
+            <h3 className="font-bold text-bk-text-primary text-sm">Tell us about yourself!</h3>
+            <div>
+              <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1">Bio</p>
+              <p className="text-sm text-bk-text-secondary leading-relaxed whitespace-pre-wrap">
+                {about?.bio || "No bio yet."}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1">Hobbies and Passions</p>
+              <p className="text-sm text-bk-text-secondary leading-relaxed whitespace-pre-wrap">
+                {about?.hobbiesAndPassions || "Not set yet."}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1.5">Industries</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {about?.industries.length ? about.industries.map((i) => (
+                    <span key={i} className="px-2.5 py-1 bg-bk-purple-light text-bk-purple text-xs rounded-full font-medium">{i}</span>
+                  )) : <span className="text-xs text-bk-text-muted">Not set</span>}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1.5">Content Types</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {about?.contentTypes.length ? about.contentTypes.map((c) => (
+                    <span key={c} className="px-2.5 py-1 bg-bk-purple-light text-bk-purple text-xs rounded-full font-medium">{c}</span>
+                  )) : <span className="text-xs text-bk-text-muted">Not set</span>}
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-bk-text-secondary leading-relaxed whitespace-pre-wrap">
-            {about?.bio || "No bio yet. Click Edit to add one."}
-          </p>
-          <div className="border-t border-bk-border-light pt-4 space-y-2">
-            <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider">Contact</p>
-            {about?.contactEmail && <p className="text-sm text-bk-text-secondary">{about.contactEmail}</p>}
-            {(about?.contactLinks ?? []).map((link) => (
+
+          <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-4">
+            <h3 className="font-bold text-bk-text-primary text-sm">Personal Info</h3>
+            {[
+              ["Pronouns", about?.pronouns],
+              ["Age", about?.age],
+              ["Location", about?.location],
+              ["Languages", about?.languages],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1">{label}</p>
+                <p className="text-sm text-bk-text-secondary">{value || "Not set"}</p>
+              </div>
+            ))}
+            <div>
+              <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1.5">Nationality</p>
+              <div className="flex flex-wrap gap-1.5">
+                {about?.nationality.length ? about.nationality.map((n) => (
+                  <span key={n} className="px-2.5 py-1 bg-bk-bg border border-bk-border text-bk-text-secondary text-xs rounded-full">{n}</span>
+                )) : <span className="text-xs text-bk-text-muted">Not set</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-3">
+            <h3 className="font-bold text-bk-text-primary text-sm">Social Links</h3>
+            {activeSocialLinks.length === 0 && <p className="text-xs text-bk-text-muted">No social links yet.</p>}
+            <div className="grid grid-cols-2 gap-3">
+              {activeSocialLinks.map((f) => (
+                <a
+                  key={f.key}
+                  href={about!.socialLinks[f.key]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-sm text-bk-purple hover:underline"
+                >
+                  <span className="flex-shrink-0">{f.icon}</span>
+                  {f.label.replace(" URL", "")}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-3">
+            <h3 className="font-bold text-bk-text-primary text-sm">Booking Links</h3>
+            {hasBooking ? (
               <a
-                key={link.url}
-                href={link.url}
+                href={about!.bookingLinks.calendly}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-sm text-bk-purple hover:underline"
+                className="flex items-center gap-2 text-sm text-bk-purple hover:underline"
               >
-                <Link size={12} /> {link.label}
+                <FaCalendar className="text-[#006BFF]" /> Calendly
               </a>
-            ))}
-            {!about?.contactEmail && (about?.contactLinks?.length ?? 0) === 0 && (
-              <p className="text-sm text-bk-text-muted">No contact info yet.</p>
+            ) : (
+              <p className="text-xs text-bk-text-muted">No booking links yet.</p>
             )}
           </div>
         </div>
+
+        {about?.contactEmail && (
+          <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5">
+            <h3 className="font-bold text-bk-text-primary text-sm mb-1">Contact Email</h3>
+            <p className="text-sm text-bk-text-secondary">{about.contactEmail}</p>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-8">
-      <div className="max-w-2xl bg-bk-bg border border-bk-border rounded-xl p-6 space-y-5">
-        <h2 className="font-bold text-bk-text-primary text-lg">Edit About</h2>
-        <div>
-          <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Bio</label>
-          <textarea
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            rows={5}
-            className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
-          />
+    <div className="flex-1 overflow-y-auto p-8 space-y-6 max-w-3xl">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-bk-text-primary">Edit About me</h2>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Tell us about yourself */}
+        <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-4">
+          <h3 className="font-bold text-bk-text-primary text-sm">Tell us about yourself!</h3>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Bio</label>
+            <textarea
+              value={draft.bio}
+              onChange={(e) => setDraft({ ...draft, bio: e.target.value.slice(0, 500) })}
+              rows={4}
+              placeholder="Enter your bio"
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+            />
+            <p className="text-xs text-bk-text-muted mt-1">{draft.bio.length} / 500 characters</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Hobbies and Passions</label>
+            <textarea
+              value={draft.hobbiesAndPassions}
+              onChange={(e) => setDraft({ ...draft, hobbiesAndPassions: e.target.value.slice(0, 500) })}
+              rows={3}
+              placeholder="Enter your hobbies and passions"
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+            />
+            <p className="text-xs text-bk-text-muted mt-1">{draft.hobbiesAndPassions.length} / 500 characters</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Industries</label>
+            <TagInput
+              value={draft.industries}
+              onChange={(industries) => setDraft({ ...draft, industries })}
+              placeholder="Add an industry"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Content Types</label>
+            <TagInput
+              value={draft.contentTypes}
+              onChange={(contentTypes) => setDraft({ ...draft, contentTypes })}
+              placeholder="Add a content type"
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Contact Email</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
-          />
+
+        {/* Personal Info */}
+        <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-4">
+          <h3 className="font-bold text-bk-text-primary text-sm">Personal Info</h3>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Pronouns</label>
+            <input
+              value={draft.pronouns ?? ""}
+              onChange={(e) => setDraft({ ...draft, pronouns: e.target.value || null })}
+              placeholder="e.g. she/her"
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Age</label>
+            <select
+              value={draft.age ?? ""}
+              onChange={(e) => setDraft({ ...draft, age: e.target.value || null })}
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+            >
+              <option value="">Select age range</option>
+              {AGE_RANGES.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Location</label>
+            <input
+              value={draft.location ?? ""}
+              onChange={(e) => setDraft({ ...draft, location: e.target.value || null })}
+              placeholder="City, State/Province, Country"
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Languages</label>
+            <input
+              value={draft.languages}
+              onChange={(e) => setDraft({ ...draft, languages: e.target.value })}
+              placeholder="e.g. English"
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Nationality</label>
+            <TagInput
+              value={draft.nationality}
+              onChange={(nationality) => setDraft({ ...draft, nationality })}
+              placeholder="Add a nationality"
+            />
+          </div>
         </div>
-        <div className="space-y-2">
-          <label className="block text-sm font-medium text-bk-text-primary">Contact Links</label>
-          {links.map((link, i) => (
-            <div key={i} className="flex gap-2">
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Social Links */}
+        <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-3">
+          <h3 className="font-bold text-bk-text-primary text-sm">Social Links</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {SOCIAL_LINK_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label className="flex items-center gap-1.5 text-xs font-medium text-bk-text-primary mb-1">
+                  {f.icon} {f.label}
+                </label>
+                <input
+                  value={draft.socialLinks[f.key]}
+                  onChange={(e) => setDraft({ ...draft, socialLinks: { ...draft.socialLinks, [f.key]: e.target.value } })}
+                  placeholder={f.placeholder}
+                  className="w-full px-3 py-2 rounded-lg border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Booking Links + Contact */}
+        <div className="space-y-4">
+          <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-3">
+            <h3 className="font-bold text-bk-text-primary text-sm">Booking Links</h3>
+            <div>
+              <label className="flex items-center gap-1.5 text-xs font-medium text-bk-text-primary mb-1">
+                <FaCalendar className="text-[#006BFF]" /> Calendly URL
+              </label>
               <input
-                value={link.label}
-                onChange={(e) => setLinks(links.map((l, j) => (j === i ? { ...l, label: e.target.value } : l)))}
-                placeholder="Label"
-                className="w-1/3 px-3 py-2 rounded-lg border border-bk-border text-sm text-bk-text-primary"
+                value={draft.bookingLinks.calendly}
+                onChange={(e) => setDraft({ ...draft, bookingLinks: { calendly: e.target.value } })}
+                placeholder="Enter URL"
+                className="w-full px-3 py-2 rounded-lg border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
               />
-              <input
-                value={link.url}
-                onChange={(e) => setLinks(links.map((l, j) => (j === i ? { ...l, url: e.target.value } : l)))}
-                placeholder="https://..."
-                className="flex-1 px-3 py-2 rounded-lg border border-bk-border text-sm text-bk-text-primary"
-              />
-              <button onClick={() => setLinks(links.filter((_, j) => j !== i))} className="px-2 text-bk-text-muted hover:text-red-500">
-                <X size={14} />
-              </button>
             </div>
-          ))}
-          <button
-            onClick={() => setLinks([...links, { label: "", url: "" }])}
-            className="flex items-center gap-1.5 text-xs text-bk-purple font-medium"
-          >
-            <Plus size={12} /> Add link
-          </button>
+          </div>
+
+          <div className="bg-bk-bg-light border border-bk-border rounded-xl p-5 space-y-3">
+            <h3 className="font-bold text-bk-text-primary text-sm">Contact Email</h3>
+            <input
+              type="email"
+              value={draft.contactEmail ?? ""}
+              onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value || null })}
+              placeholder="you@example.com"
+              className="w-full px-3 py-2 rounded-lg border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+            />
+          </div>
         </div>
-        <div className="flex gap-3 pt-1">
-          <button
-            onClick={() => setEditing(false)}
-            className="flex-1 py-2.5 border border-bk-border rounded-xl text-sm text-bk-text-secondary hover:bg-bk-bg-light transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        </div>
+      </div>
+
+      <div className="flex gap-3 pt-1 max-w-sm">
+        <button
+          onClick={() => setEditing(false)}
+          className="flex-1 py-2.5 border border-bk-border rounded-xl text-sm text-bk-text-secondary hover:bg-bk-bg-light transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex-1 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
+        >
+          {saving ? "Saving..." : "Save"}
+        </button>
       </div>
     </div>
   );

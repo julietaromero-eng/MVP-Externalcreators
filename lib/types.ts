@@ -27,15 +27,35 @@ export interface CreatorProfile {
   recentPosts: CreatorPost[];
 }
 
-export interface ContactLink {
-  label: string;
-  url: string;
+export interface SocialLinks {
+  tiktok: string;
+  instagram: string;
+  youtube: string;
+  kwai: string;
+  linkedin: string;
+  twitter: string;
+  threads: string;
+  facebook: string;
+  website: string;
+}
+
+export interface BookingLinks {
+  calendly: string;
 }
 
 export interface PortfolioAbout {
   bio: string;
+  hobbiesAndPassions: string;
+  industries: string[];
+  contentTypes: string[];
+  pronouns: string | null;
+  age: string | null;
+  location: string | null;
+  languages: string;
+  nationality: string[];
   contactEmail: string | null;
-  contactLinks: ContactLink[];
+  socialLinks: SocialLinks;
+  bookingLinks: BookingLinks;
 }
 
 export interface ProfileOverrides {
@@ -50,6 +70,7 @@ export interface AIAnalysis {
   primaryLanguage: string;
   tags: string[];
   topics: string[];
+  hobbiesAndPassions: string;
 }
 
 export interface GenerateResponse {

@@ -1,14 +1,29 @@
 import { getSupabaseAdmin } from "./supabase";
 import type {
   AIAnalysis,
-  ContactLink,
+  BookingLinks,
   CreatorPost,
   CreatorProfile,
   Platform,
   PortfolioAbout,
   ProfileOverrides,
   ProfileStatus,
+  SocialLinks,
 } from "./types";
+
+const EMPTY_SOCIAL_LINKS: SocialLinks = {
+  tiktok: "",
+  instagram: "",
+  youtube: "",
+  kwai: "",
+  linkedin: "",
+  twitter: "",
+  threads: "",
+  facebook: "",
+  website: "",
+};
+
+const EMPTY_BOOKING_LINKS: BookingLinks = { calendly: "" };
 
 async function getOrCreatePortfolioId(): Promise<string> {
   const supabase = getSupabaseAdmin();
@@ -64,6 +79,12 @@ function profileRowToCreatorProfile(
   };
 }
 
+function profileUrl(profile: CreatorProfile): string {
+  if (profile.platform === "instagram") return `https://instagram.com/${profile.username}`;
+  if (profile.platform === "tiktok") return `https://www.tiktok.com/@${profile.username}`;
+  return "";
+}
+
 export async function saveGeneratedPortfolio(
   profiles: CreatorProfile[],
   aiAnalysis: AIAnalysis
@@ -71,16 +92,30 @@ export async function saveGeneratedPortfolio(
   const supabase = getSupabaseAdmin();
   const portfolioId = await getOrCreatePortfolioId();
 
-  const { data: currentPortfolio } = await supabase
+  const { data: current } = await supabase
     .from("portfolios")
-    .select("about_bio")
+    .select("about_bio, about_hobbies, about_industries, about_content_types, about_languages, social_links")
     .eq("id", portfolioId)
     .single();
 
   const portfolioUpdates: Record<string, unknown> = { generated_at: new Date().toISOString() };
-  if (!currentPortfolio?.about_bio) {
-    portfolioUpdates.about_bio = aiAnalysis.summary;
+  if (!current?.about_bio) portfolioUpdates.about_bio = aiAnalysis.summary;
+  if (!current?.about_hobbies) portfolioUpdates.about_hobbies = aiAnalysis.hobbiesAndPassions;
+  if (!current?.about_industries?.length) portfolioUpdates.about_industries = aiAnalysis.contentPillars;
+  if (!current?.about_content_types?.length) portfolioUpdates.about_content_types = aiAnalysis.topics;
+  if (!current?.about_languages) portfolioUpdates.about_languages = aiAnalysis.primaryLanguage;
+
+  const existingSocialLinks: SocialLinks = { ...EMPTY_SOCIAL_LINKS, ...(current?.social_links ?? {}) };
+  const mergedSocialLinks = { ...existingSocialLinks };
+  for (const profile of profiles) {
+    if (profile.platform === "instagram" && !mergedSocialLinks.instagram) {
+      mergedSocialLinks.instagram = profileUrl(profile);
+    }
+    if (profile.platform === "tiktok" && !mergedSocialLinks.tiktok) {
+      mergedSocialLinks.tiktok = profileUrl(profile);
+    }
   }
+  portfolioUpdates.social_links = mergedSocialLinks;
 
   await supabase.from("portfolios").update(portfolioUpdates).eq("id", portfolioId);
 
@@ -137,6 +172,7 @@ export async function saveGeneratedPortfolio(
       primary_language: aiAnalysis.primaryLanguage,
       tags: aiAnalysis.tags,
       topics: aiAnalysis.topics,
+      hobbies_and_passions: aiAnalysis.hobbiesAndPassions,
     },
     { onConflict: "portfolio_id" }
   );
@@ -197,6 +233,7 @@ export async function loadPortfolio(): Promise<LoadedPortfolio | null> {
     primaryLanguage: (aiRow?.primary_language as string) ?? "",
     tags: (aiRow?.tags as string[]) ?? [],
     topics: (aiRow?.topics as string[]) ?? [],
+    hobbiesAndPassions: (aiRow?.hobbies_and_passions as string) ?? "",
   };
 
   return {
@@ -205,8 +242,17 @@ export async function loadPortfolio(): Promise<LoadedPortfolio | null> {
     generatedAt: portfolio.generated_at as string,
     about: {
       bio: (portfolio.about_bio as string) ?? "",
+      hobbiesAndPassions: (portfolio.about_hobbies as string) ?? "",
+      industries: (portfolio.about_industries as string[]) ?? [],
+      contentTypes: (portfolio.about_content_types as string[]) ?? [],
+      pronouns: (portfolio.about_pronouns as string) ?? null,
+      age: (portfolio.about_age as string) ?? null,
+      location: (portfolio.about_location as string) ?? null,
+      languages: (portfolio.about_languages as string) ?? "",
+      nationality: (portfolio.about_nationality as string[]) ?? [],
       contactEmail: (portfolio.contact_email as string) ?? null,
-      contactLinks: (portfolio.contact_links as ContactLink[]) ?? [],
+      socialLinks: { ...EMPTY_SOCIAL_LINKS, ...(portfolio.social_links as Partial<SocialLinks>) },
+      bookingLinks: { ...EMPTY_BOOKING_LINKS, ...(portfolio.booking_links as Partial<BookingLinks>) },
     },
     profileOverrides: {
       displayName: (portfolio.display_name as string) ?? null,
@@ -242,8 +288,17 @@ export async function saveAbout(about: PortfolioAbout): Promise<PortfolioAbout> 
     .from("portfolios")
     .update({
       about_bio: about.bio,
+      about_hobbies: about.hobbiesAndPassions,
+      about_industries: about.industries,
+      about_content_types: about.contentTypes,
+      about_pronouns: about.pronouns,
+      about_age: about.age,
+      about_location: about.location,
+      about_languages: about.languages,
+      about_nationality: about.nationality,
       contact_email: about.contactEmail,
-      contact_links: about.contactLinks,
+      social_links: about.socialLinks,
+      booking_links: about.bookingLinks,
     })
     .eq("id", portfolioId);
 
