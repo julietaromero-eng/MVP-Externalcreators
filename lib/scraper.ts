@@ -1,13 +1,15 @@
 import { ApifyClient } from "apify-client";
 
 function extractIgUsername(url: string): string {
-  const match = url.match(/instagram\.com\/([^/?#]+)/);
-  return match ? match[1] : url.replace(/^@/, "");
+  const trimmed = url.trim();
+  const match = trimmed.match(/instagram\.com\/([^/?#]+)/);
+  return match ? match[1] : trimmed.replace(/^@/, "");
 }
 
 function extractTikTokUsername(url: string): string {
-  const match = url.match(/@([^/?#]+)/);
-  return match ? match[1] : url;
+  const trimmed = url.trim();
+  const match = trimmed.match(/@([^/?#]+)/);
+  return match ? match[1] : trimmed;
 }
 
 const FEED_POST_TARGET = 20;

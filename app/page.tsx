@@ -421,25 +421,25 @@ function URLModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-bk-text-primary mb-1.5">
-              <FaInstagram size={16} className="text-bk-text-secondary" /> Instagram Profile URL
+              <FaInstagram size={16} className="text-bk-text-secondary" /> Instagram Profile URL or Username
             </label>
             <input
-              type="url"
+              type="text"
               value={igUrl}
               onChange={(e) => setIgUrl(e.target.value)}
-              placeholder="https://instagram.com/johndoe"
+              placeholder="https://instagram.com/johndoe or @johndoe"
               className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
             />
           </div>
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-bk-text-primary mb-1.5">
-              <FaTiktok size={16} className="text-bk-text-secondary" /> TikTok Profile URL
+              <FaTiktok size={16} className="text-bk-text-secondary" /> TikTok Profile URL or Username
             </label>
             <input
-              type="url"
+              type="text"
               value={ttUrl}
               onChange={(e) => setTtUrl(e.target.value)}
-              placeholder="https://tiktok.com/@johndoe"
+              placeholder="https://tiktok.com/@johndoe or @johndoe"
               className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
             />
           </div>
