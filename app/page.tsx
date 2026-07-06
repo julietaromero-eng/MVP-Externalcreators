@@ -1500,22 +1500,39 @@ function ComingSoonTab({ label }: { label: string }) {
 
 // ─── Audience Analytics Tab ──────────────────────────────────────────────────
 
-function engagementRate(post: CreatorPost, followersCount: number): number {
+// Instagram's public API doesn't expose per-post reach/views, so we approximate it from
+// followers using industry-typical organic-reach ratios (reach as a % of followers drops
+// as an account grows). Always surfaced to the user as "estimated", never as real data.
+function estimatedInstagramReach(followersCount: number): number {
   if (!followersCount) return 0;
-  return ((post.likesCount + post.commentsCount) / followersCount) * 100;
+  const ratio = followersCount < 10_000 ? 0.35 : followersCount < 100_000 ? 0.2 : followersCount < 1_000_000 ? 0.1 : 0.05;
+  return Math.round(followersCount * ratio);
+}
+
+function computeEngagement(
+  post: CreatorPost,
+  profile: CreatorProfile
+): { rate: number; reach: number; isEstimated: boolean } {
+  const interactions = post.likesCount + post.commentsCount;
+  const isEstimated = !post.viewsCount || post.viewsCount <= 0;
+  const reach = isEstimated ? estimatedInstagramReach(profile.followersCount) : (post.viewsCount as number);
+  const rate = reach ? (interactions / reach) * 100 : 0;
+  return { rate, reach, isEstimated };
 }
 
 function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
   const platformStats = result.profiles
     .filter((profile) => profile.recentPosts.length > 0)
     .map((profile) => {
-      const rates = profile.recentPosts.map((post) => engagementRate(post, profile.followersCount));
-      const avgRate = rates.reduce((sum, r) => sum + r, 0) / rates.length;
+      const engagements = profile.recentPosts.map((post) => computeEngagement(post, profile));
+      const avgRate = engagements.reduce((sum, e) => sum + e.rate, 0) / engagements.length;
+      const avgReach = engagements.reduce((sum, e) => sum + e.reach, 0) / engagements.length;
+      const isEstimated = engagements.some((e) => e.isEstimated);
       const topPosts = profile.recentPosts
-        .map((post, i) => ({ post, rate: rates[i] }))
+        .map((post, i) => ({ post, ...engagements[i] }))
         .sort((a, b) => b.rate - a.rate)
         .slice(0, 3);
-      return { profile, avgRate, topPosts };
+      return { profile, avgRate, avgReach, isEstimated, topPosts };
     });
 
   if (platformStats.length === 0) {
@@ -1537,12 +1554,12 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
       <div>
         <h2 className="text-xl font-bold text-bk-text-primary mb-1">Audience Analytics</h2>
         <p className="text-sm text-bk-text-secondary">
-          Engagement rate (ER) calculated from likes + comments relative to followers — use this to benchmark content performance for brand pitches.
+          Engagement rate (ER) calculated as interactions (likes + comments) over reach per video — use this to benchmark content performance for brand pitches and estimate campaign reach.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {platformStats.map(({ profile, avgRate, topPosts }) => {
+        {platformStats.map(({ profile, avgRate, avgReach, isEstimated, topPosts }) => {
           const isIG = profile.platform === "instagram";
           return (
             <div key={profile.platform} className="bg-bk-bg border border-bk-border rounded-xl p-5 space-y-4">
@@ -1557,17 +1574,36 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
                 <span className="text-xs text-bk-text-muted">{fmt(profile.followersCount)} followers</span>
               </div>
 
-              <div>
-                <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1">Avg. Engagement Rate</p>
-                <p className="text-2xl font-bold text-bk-purple">{avgRate.toFixed(2)}%</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1">Avg. Engagement Rate</p>
+                  <p className="text-2xl font-bold text-bk-purple">{avgRate.toFixed(2)}%</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-1 flex items-center gap-1">
+                    Avg. Reach / Video
+                    {isEstimated && <span className="text-[10px] font-normal text-bk-text-muted normal-case">(estimated)</span>}
+                  </p>
+                  <p className="text-2xl font-bold text-bk-text-primary">{fmt(Math.round(avgReach))}</p>
+                </div>
               </div>
+              {isEstimated && (
+                <p className="text-[11px] text-bk-text-muted -mt-2">
+                  Instagram doesn&apos;t expose real view/reach data publicly — reach is estimated from followers and shouldn&apos;t be quoted to brands as an exact number.
+                </p>
+              )}
 
               <div className="border-t border-bk-border-light pt-3 space-y-2">
                 <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider">Top Posts by ER</p>
-                {topPosts.map(({ post, rate }, i) => (
+                {topPosts.map(({ post, rate, reach, isEstimated: postEstimated }, i) => (
                   <div key={post.id ?? i} className="flex items-center justify-between gap-3 text-sm">
                     <span className="text-bk-text-secondary line-clamp-1">{post.caption || "—"}</span>
-                    <span className="font-semibold text-bk-text-primary flex-shrink-0">{rate.toFixed(2)}%</span>
+                    <span className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-xs text-bk-text-muted flex items-center gap-1">
+                        <Eye size={12} /> {fmt(reach)}{postEstimated ? "~" : ""}
+                      </span>
+                      <span className="font-semibold text-bk-text-primary">{rate.toFixed(2)}%</span>
+                    </span>
                   </div>
                 ))}
               </div>
