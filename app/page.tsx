@@ -99,19 +99,48 @@ function Sidebar() {
 
 // ─── Profile Header ──────────────────────────────────────────────────────────
 
+function PlatformBadge({ profile }: { profile: CreatorProfile }) {
+  const href =
+    profile.platform === "instagram"
+      ? `https://instagram.com/${profile.username}`
+      : profile.platform === "tiktok"
+        ? `https://www.tiktok.com/@${profile.username}`
+        : undefined;
+
+  const icon =
+    profile.platform === "instagram" ? (
+      <FaInstagram size={14} className="text-[#E1306C]" />
+    ) : profile.platform === "tiktok" ? (
+      <FaTiktok size={14} className="text-bk-text-primary" />
+    ) : null;
+
+  if (!icon) return null;
+
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="w-7 h-7 rounded-lg border border-bk-border flex items-center justify-center hover:bg-bk-bg-light transition-colors"
+    >
+      {icon}
+    </a>
+  );
+}
+
 function ProfileHeader({
   profile,
+  profiles,
   overrides,
   onEditClick,
 }: {
   profile?: CreatorProfile;
+  profiles: CreatorProfile[];
   overrides?: ProfileOverrides | null;
   onEditClick: () => void;
 }) {
   const name = overrides?.displayName || profile?.displayName || "John Romero";
   const profilePicUrl = overrides?.profilePicUrl || profile?.profilePicUrl;
-  const igHandle = profile?.platform === "instagram" ? `@${profile.username}` : "@johndoe";
-  const ttHandle = profile?.platform === "tiktok" ? `@${profile.username}` : "@johntiktok";
   const initial = name.charAt(0).toUpperCase();
 
   return (
@@ -120,36 +149,38 @@ function ProfileHeader({
         <div className="flex items-center gap-4">
           <div className="relative">
             {profilePicUrl ? (
-              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-bk-border">
-                <Image src={profilePicUrl} alt={name} width={48} height={48} className="object-cover" />
+              <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-bk-border">
+                <Image src={profilePicUrl} alt={name} width={56} height={56} className="object-cover" />
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-full bg-bk-purple-light flex items-center justify-center">
-                <span className="text-bk-purple font-bold text-lg">{initial}</span>
+              <div className="w-14 h-14 rounded-full bg-bk-purple-light flex items-center justify-center">
+                <span className="text-bk-purple font-bold text-xl">{initial}</span>
               </div>
             )}
+            <button
+              onClick={onEditClick}
+              className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-bk-bg border border-bk-border rounded-md px-1.5 py-0.5 text-[10px] font-medium text-bk-text-primary hover:bg-bk-bg-light transition-colors whitespace-nowrap"
+            >
+              Edit
+            </button>
           </div>
           <div>
             <h1 className="font-bold text-bk-text-primary text-lg leading-tight">{name}</h1>
-            <div className="flex items-center gap-3 mt-0.5">
-              <span className="text-xs text-bk-text-muted">{igHandle}</span>
-              <span className="text-bk-border">·</span>
-              <span className="text-xs text-bk-text-muted">{ttHandle}</span>
-            </div>
+            {profiles.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-2">
+                {profiles.map((p) => (
+                  <PlatformBadge key={p.platform} profile={p} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 bg-bk-bg-light border border-bk-border rounded-lg px-3 py-1.5">
-            <Link size={12} className="text-bk-text-muted" />
-            <span className="text-xs text-bk-text-secondary">portfolio.brkaway.co/johndoe</span>
+        <div className="flex items-start gap-1.5 bg-bk-bg-light border border-bk-border rounded-xl px-4 py-3 min-w-[260px]">
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-bk-text-primary">Public portfolio URL</p>
+            <span className="text-xs text-bk-purple">portfolio.brkaway.co/johndoe</span>
           </div>
-          <button
-            onClick={onEditClick}
-            className="flex items-center gap-1.5 border border-bk-border rounded-lg px-3 py-1.5 text-xs text-bk-text-secondary hover:bg-bk-bg-light transition-colors"
-          >
-            <Pencil size={12} />
-            Edit
-          </button>
+          <Pencil size={12} className="text-bk-text-muted mt-0.5" />
         </div>
       </div>
     </div>
@@ -267,43 +298,59 @@ function TabBar({ activeTab, onTabChange }: { activeTab: string; onTabChange: (t
 // ─── Right Panel ─────────────────────────────────────────────────────────────
 
 function RightPanel({ result }: { result: GenerateResponse | null }) {
+  const [dismissed, setDismissed] = useState(false);
   const igProfile = result?.profiles.find((p) => p.platform === "instagram");
   const ttProfile = result?.profiles.find((p) => p.platform === "tiktok");
   const hasResult = !!result;
 
+  const steps = [
+    { title: "Step 1: Add Videos/Photos", isComplete: hasResult, isActive: !hasResult },
+    { title: "Step 2: Complete Your About Page", isComplete: hasResult, isActive: false },
+    { title: "Step 3: You're All Ready To Go! 🎉", isComplete: hasResult, isActive: false },
+  ];
+
   return (
     <aside className="w-[300px] flex-shrink-0 bg-bk-bg-light border-l border-bk-border p-5 space-y-4 overflow-y-auto">
-      {/* Setup Card */}
-      <div className="bg-bk-bg border border-bk-border rounded-xl p-4 space-y-3">
-        <div>
-          <h3 className="font-bold text-bk-text-primary text-sm">Portfolio Setup</h3>
-          <p className="text-xs text-bk-text-muted mt-0.5">
-            {hasResult ? "All steps completed!" : "3 steps to get started"}
-          </p>
-        </div>
-        <div className="h-1.5 bg-bk-border-light rounded-full overflow-hidden">
-          <div
-            className="h-full bg-bk-success rounded-full transition-all duration-700"
-            style={{ width: hasResult ? "100%" : "0%" }}
-          />
-        </div>
-        <div className="space-y-2.5">
-          {["Add Videos/Photos", "Complete Your About Page", "You're All Ready To Go!"].map((step, i) => (
-            <div key={i} className="flex items-center gap-2.5">
-              <div
-                className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  hasResult ? "bg-bk-success" : "border-2 border-bk-border"
-                }`}
-              >
-                {hasResult && <Check size={11} className="text-white" strokeWidth={3} />}
-              </div>
-              <span className={`text-xs ${hasResult ? "text-bk-text-primary" : "text-bk-text-muted"}`}>
-                {hasResult ? `Step ${i + 1}: ${step}` : ["Connect Instagram", "Connect TikTok", "Create your first portfolio"][i]}
-              </span>
+      {/* Setup Checklist */}
+      {!dismissed && (
+        <div className="bg-bk-bg-light border border-bk-border rounded-xl p-4">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 className="font-bold text-bk-text-primary text-sm">Finish Setting Up Your Portfolio</h3>
+              <p className="text-xs text-bk-text-muted mt-0.5">Follow the steps below to complete your portfolio.</p>
             </div>
-          ))}
+            <button
+              onClick={() => hasResult && setDismissed(true)}
+              disabled={!hasResult}
+              title={!hasResult ? "Please complete the required steps to close this checklist." : ""}
+              className="text-bk-text-muted hover:text-bk-text-primary disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <div className="space-y-1">
+            {steps.map((step, i) => (
+              <div key={step.title} className="relative pl-8 pb-1">
+                {i < steps.length - 1 && (
+                  <span className="absolute left-[9px] top-5 bottom-0 w-0.5 bg-bk-purple" />
+                )}
+                <span
+                  className={`absolute left-0 top-0 w-5 h-5 rounded-full flex items-center justify-center ${
+                    step.isComplete || step.isActive ? "bg-bk-purple" : "bg-bk-border"
+                  } ${step.isActive ? "ring-4 ring-bk-purple-light" : ""}`}
+                >
+                  {step.isComplete ? (
+                    <Check size={10} className="text-white" strokeWidth={3} />
+                  ) : (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                  )}
+                </span>
+                <span className="text-xs font-semibold text-bk-text-primary">{step.title}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Imported Content (only when result) */}
       {hasResult && (
@@ -331,21 +378,14 @@ function RightPanel({ result }: { result: GenerateResponse | null }) {
       )}
 
       {/* Discoverable Card */}
-      <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--gradient-brand)" }}>
+      <div className="rounded-xl p-4 space-y-2" style={{ background: "var(--gradient-brand)" }}>
         <div className="flex items-center gap-2">
           <Zap size={16} className="text-white fill-white" />
-          <span className="text-white font-bold text-sm">
-            {hasResult ? "Discoverable to Brands" : "Get Discoverable"}
-          </span>
+          <span className="text-white font-bold text-sm">Become Discoverable to Brands</span>
         </div>
         <p className="text-white/80 text-xs leading-relaxed">
-          {hasResult
-            ? "Your portfolio is live! Brands can now find you based on your content and niche."
-            : "Complete your portfolio setup to get discovered by brands in your niche."}
+          Want to stand out to brands? Completing your portfolio increases your discoverability and helps you get prioritized in brand searches.
         </p>
-        <button className="w-full bg-white/20 hover:bg-white/30 text-white text-xs font-semibold py-2 rounded-lg transition-colors">
-          {hasResult ? "View Public Profile" : "Complete Setup"}
-        </button>
       </div>
     </aside>
   );
@@ -357,15 +397,15 @@ function EmptyState({ onCreateByURL }: { onCreateByURL: () => void }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center py-16 px-8">
       <h2 className="text-2xl font-bold text-bk-text-primary mb-2 flex items-center gap-2">
-        Portfolio <span>🔗</span>
+        Portfolio <span>🎨</span>
       </h2>
       <p className="text-bk-text-secondary text-sm text-center max-w-sm mb-8">
         Your portfolio contains all of your work brands will see. Make sure you include a variety of video & photo examples that best highlight your skills as a creator.
       </p>
-      <button className="flex items-center gap-2 border-2 border-bk-border bg-bk-bg text-bk-text-primary font-semibold px-6 py-3 rounded-xl text-sm hover:bg-bk-bg-light transition-colors mb-3">
+      <button className="flex items-center gap-2 bg-bk-purple text-white font-semibold px-6 py-3 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors mb-3">
         ↑ Upload Content
       </button>
-      <p className="text-xs text-bk-text-muted mb-3">or drag and drop files here</p>
+      <p className="text-xs text-bk-purple mb-3">or drag and drop files here</p>
       <p className="text-xs text-bk-text-muted mb-3">or</p>
       <button
         onClick={onCreateByURL}
@@ -1486,6 +1526,7 @@ export default function Home() {
       <div className="flex flex-1 flex-col overflow-hidden">
         <ProfileHeader
           profile={firstProfile}
+          profiles={result?.profiles ?? []}
           overrides={profileOverrides}
           onEditClick={() => setEditingProfile(true)}
         />
