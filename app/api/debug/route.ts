@@ -22,16 +22,33 @@ export async function GET(request: Request) {
   // Find the user id field
   const idField = profileJson.pk ?? profileJson.id ?? profileJson.user_id ?? profileJson.userId;
 
+  // Step 2: feed
+  const feedRes = await fetch(`https://${host}/feed?user_id=${idField}`, { headers });
+  const feedJson = await feedRes.json();
+  const items = (feedJson.items ?? []) as Record<string, unknown>[];
+
   return Response.json({
     step: "profile_ok",
     status: profileRes.status,
     topKeys: Object.keys(profileJson),
     pk: profileJson.pk,
-    id: profileJson.id,
-    user_id: profileJson.user_id,
-    idField,
     username: profileJson.username,
     full_name: profileJson.full_name,
     follower_count: profileJson.follower_count,
+    feed: {
+      status: feedRes.status,
+      topLevelKeys: Object.keys(feedJson),
+      itemCount: items.length,
+      itemKeys: items[0] ? Object.keys(items[0]) : [],
+      itemsPreview: items.map((it) => ({
+        id: it.id,
+        taken_at: it.taken_at,
+        like_count: it.like_count,
+        comment_count: it.comment_count,
+        media_type: it.media_type,
+        is_pinned: it.is_pinned,
+        timeline_pinned_user_ids: it.timeline_pinned_user_ids,
+      })),
+    },
   });
 }

@@ -2,6 +2,8 @@ import type { CreatorProfile, CreatorPost } from "./types";
 
 type RawData = Record<string, unknown>;
 
+const MAX_POSTS = 20;
+
 function igEngagement(p: RawData): number {
   return ((p.like_count as number) ?? 0) + ((p.comment_count as number) ?? 0) * 3;
 }
@@ -16,10 +18,9 @@ function ttEngagement(v: RawData): number {
 
 export function normalizeInstagram(raw: RawData): CreatorProfile {
   const rawPosts = (raw.latestPosts as RawData[]) ?? [];
+  const sorted = [...rawPosts].sort((a, b) => igEngagement(b) - igEngagement(a)).slice(0, MAX_POSTS);
 
-  const sorted = [...rawPosts].sort((a, b) => igEngagement(b) - igEngagement(a));
-
-  const recentPosts: CreatorPost[] = sorted.slice(0, 12).map((p) => {
+  const recentPosts: CreatorPost[] = sorted.map((p) => {
     const isCarousel = (p.media_type as number) === 8;
     const candidates = isCarousel
       ? ((p.carousel_media as RawData[])?.[0]?.image_versions2 as RawData)?.candidates as RawData[]
@@ -48,12 +49,26 @@ export function normalizeInstagram(raw: RawData): CreatorProfile {
   };
 }
 
+export function stubProfile(platform: "youtube" | "other", url: string): CreatorProfile {
+  return {
+    platform,
+    status: "coming_soon",
+    username: url,
+    displayName: url,
+    bio: "",
+    followersCount: 0,
+    followingCount: 0,
+    postsCount: 0,
+    profilePicUrl: null,
+    recentPosts: [],
+  };
+}
+
 export function normalizeTikTok(raw: RawData): CreatorProfile {
   const rawVideos = (raw.videos as RawData[]) ?? [];
+  const sorted = [...rawVideos].sort((a, b) => ttEngagement(b) - ttEngagement(a)).slice(0, MAX_POSTS);
 
-  const sorted = [...rawVideos].sort((a, b) => ttEngagement(b) - ttEngagement(a));
-
-  const recentPosts: CreatorPost[] = sorted.slice(0, 12).map((v) => {
+  const recentPosts: CreatorPost[] = sorted.map((v) => {
     const stats = (v.stats as Record<string, number>) ?? {};
     const videoInfo = (v.video as RawData) ?? {};
     return {
