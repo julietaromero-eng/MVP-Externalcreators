@@ -22,9 +22,7 @@ function fmt(n: number): string {
 
 type PageState = "empty" | "modal" | "loading" | "result";
 
-const LOADING_STEPS = [
-  "Connecting to Instagram...",
-  "Connecting to TikTok...",
+const BASE_LOADING_STEPS = [
   "Importing public content...",
   "Ranking posts by engagement...",
   "Detecting content categories...",
@@ -32,6 +30,14 @@ const LOADING_STEPS = [
   "Organizing portfolio...",
   "Finalizing portfolio...",
 ];
+
+function buildLoadingSteps(igUrl: string, ttUrl: string, ytUrl: string): string[] {
+  const connectSteps: string[] = [];
+  if (igUrl) connectSteps.push("Connecting to Instagram...");
+  if (ttUrl) connectSteps.push("Connecting to TikTok...");
+  if (ytUrl) connectSteps.push("Connecting to YouTube...");
+  return [...connectSteps, ...BASE_LOADING_STEPS];
+}
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
@@ -421,7 +427,7 @@ function URLModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-bk-text-primary mb-1.5">
-              <FaInstagram size={16} className="text-bk-text-secondary" /> Instagram Profile URL or Username
+              <FaInstagram size={16} className="text-bk-text-secondary" /> Instagram URL or Username
             </label>
             <input
               type="text"
@@ -433,7 +439,7 @@ function URLModal({
           </div>
           <div>
             <label className="flex items-center gap-2 text-sm font-medium text-bk-text-primary mb-1.5">
-              <FaTiktok size={16} className="text-bk-text-secondary" /> TikTok Profile URL or Username
+              <FaTiktok size={16} className="text-bk-text-secondary" /> TikTok URL or Username
             </label>
             <input
               type="text"
@@ -489,8 +495,8 @@ function URLModal({
 
 // ─── Loading State ───────────────────────────────────────────────────────────
 
-function LoadingState({ completedSteps }: { completedSteps: number }) {
-  const progress = Math.round((completedSteps / LOADING_STEPS.length) * 100);
+function LoadingState({ completedSteps, steps }: { completedSteps: number; steps: string[] }) {
+  const progress = Math.round((completedSteps / steps.length) * 100);
 
   return (
     <div className="flex-1 flex items-center justify-center p-8">
@@ -505,7 +511,7 @@ function LoadingState({ completedSteps }: { completedSteps: number }) {
         </div>
 
         <div className="space-y-4">
-          {LOADING_STEPS.map((step, i) => {
+          {steps.map((step, i) => {
             const done = i < completedSteps;
             const active = i === completedSteps;
             return (
@@ -1276,6 +1282,7 @@ export default function Home() {
   const [pageState, setPageState] = useState<PageState>("empty");
   const [initializing, setInitializing] = useState(true);
   const [completedSteps, setCompletedSteps] = useState(0);
+  const [loadingSteps, setLoadingSteps] = useState<string[]>(BASE_LOADING_STEPS);
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [about, setAbout] = useState<PortfolioAbout | null>(null);
   const [profileOverrides, setProfileOverrides] = useState<ProfileOverrides | null>(null);
@@ -1300,14 +1307,14 @@ export default function Home() {
       .finally(() => setInitializing(false));
   }, []);
 
-  const startStepAnimation = () => {
+  const startStepAnimation = (stepCount: number) => {
     setCompletedSteps(0);
     const DELAYS = [3000, 5000, 8000, 12000, 18000, 25000, 35000, 45000];
     let step = 0;
     const tick = () => {
       step++;
       setCompletedSteps(step);
-      if (step < LOADING_STEPS.length - 1) {
+      if (step < stepCount - 1) {
         stepIntervalRef.current = setTimeout(tick, DELAYS[step] ?? 5000);
       }
     };
@@ -1319,10 +1326,12 @@ export default function Home() {
   };
 
   const handleGenerate = async (igUrl: string, ttUrl: string, ytUrl: string) => {
+    const steps = buildLoadingSteps(igUrl, ttUrl, ytUrl);
+    setLoadingSteps(steps);
     setPageState("loading");
     setError(null);
     setEditMode(false);
-    startStepAnimation();
+    startStepAnimation(steps.length);
 
     try {
       const res = await fetch("/api/generate", {
@@ -1334,7 +1343,7 @@ export default function Home() {
       stopStepAnimation();
 
       if (res.ok) {
-        setCompletedSteps(LOADING_STEPS.length);
+        setCompletedSteps(steps.length);
         setTimeout(() => {
           setResult(data);
           setAbout(data.about ?? null);
@@ -1494,7 +1503,7 @@ export default function Home() {
           {/* Main content */}
           <div className="flex flex-1 overflow-hidden">
             {pageState === "empty" && <EmptyState onCreateByURL={() => setPageState("modal")} />}
-            {pageState === "loading" && <LoadingState completedSteps={completedSteps} />}
+            {pageState === "loading" && <LoadingState completedSteps={completedSteps} steps={loadingSteps} />}
             {pageState === "result" && result && activeTab === "Portfolio" && (
               <PortfolioResult
                 result={result}
