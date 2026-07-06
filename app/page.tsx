@@ -566,6 +566,7 @@ function ContentCard({
             src={post.thumbnailUrl}
             alt={post.caption.slice(0, 60) || "Post"}
             fill
+            draggable={false}
             className="object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
