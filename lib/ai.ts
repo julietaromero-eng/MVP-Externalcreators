@@ -27,22 +27,22 @@ export async function generateCreatorAnalysis(
       {
         role: "system",
         content:
-          "Sos un experto en marketing de influencers en Latinoamérica. Analizás creators para brand partnerships y respondés siempre en JSON válido.",
+          "You are an influencer marketing expert. You analyze creators for brand partnerships and always respond with valid JSON, written entirely in English regardless of the creator's own content language.",
       },
       {
         role: "user",
-        content: `Analizá este creator y respondé con este JSON exacto (en español, salvo primaryLanguage que va en inglés):
+        content: `Analyze this creator and respond with this exact JSON (everything in English, including primaryLanguage which names the creator's own content language in English, e.g. "Spanish"):
 {
-  "summary": "2-3 párrafos profesionales sobre el creator para que una marca lo evalúe",
-  "contentPillars": ["máximo 4 pilares de contenido, ej: Moda, Viajes, Lifestyle"],
-  "audience": "descripción corta de audiencia, ej: Mujeres 18-34",
-  "primaryLanguage": "idioma en inglés, ej: Spanish",
-  "tags": ["3-4 atributos, ej: Auténtico, Brand Safe, Alto Engagement"],
-  "topics": ["5-8 temas recurrentes en su contenido"],
-  "hobbiesAndPassions": "1-2 oraciones sobre intereses/pasiones que se notan en su contenido público (ej: deportes, música, viajes). Inferí solo a partir del contenido visible, no inventes datos personales que no se puedan deducir del contenido."
+  "summary": "2-3 professional paragraphs about the creator for a brand to evaluate",
+  "contentPillars": ["up to 4 content pillars, e.g. Fashion, Travel, Lifestyle"],
+  "audience": "short audience description, e.g. Women 18-34",
+  "primaryLanguage": "the creator's own content language, in English, e.g. Spanish",
+  "tags": ["3-4 attributes, e.g. Authentic, Brand Safe, High Engagement"],
+  "topics": ["5-8 recurring topics in their content"],
+  "hobbiesAndPassions": "1-2 sentences about interests/passions visible in their public content (e.g. sports, music, travel). Only infer from visible content — never fabricate personal facts that can't be deduced from the content."
 }
 
-Datos del creator:
+Creator data:
 ${JSON.stringify(profileData, null, 2)}`,
       },
     ],

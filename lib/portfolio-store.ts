@@ -136,7 +136,7 @@ export async function saveGeneratedPortfolio(
           total_likes: profile.totalLikes ?? null,
           status: profile.status ?? "active",
         },
-        { onConflict: "portfolio_id,platform,username" }
+        { onConflict: "portfolio_id,platform" }
       )
       .select("id")
       .single();
