@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import {
-  LayoutDashboard, Bell, MessageSquare, Package, Handshake,
-  Compass, SquareCheck, Tag, Briefcase, Receipt, Zap,
-  Link, Pencil, Check, Loader2, X, Search, SlidersHorizontal,
+  LayoutDashboard, Bell, MessageSquare, Briefcase, Handshake,
+  Megaphone, Images, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap,
+  Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
   Heart, MessageCircle, Eye, GripVertical, Plus,
 } from "lucide-react";
 import { FaInstagram, FaTiktok } from "react-icons/fa6";
@@ -39,34 +39,51 @@ const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard" },
   { icon: Bell, label: "Notifications" },
   { icon: MessageSquare, label: "Messages" },
-  { icon: Package, label: "Deliverables" },
+  { icon: Briefcase, label: "Deliverables" },
   { icon: Handshake, label: "Collabs" },
-  { icon: Compass, label: "Opportunities" },
-  { icon: SquareCheck, label: "Tasks" },
-  { icon: Tag, label: "Brands" },
-  { icon: Briefcase, label: "Portfolio", active: true },
-  { icon: Receipt, label: "Invoicing" },
+  { icon: Megaphone, label: "Opportunities" },
+  { icon: Images, label: "Portfolio", active: true },
+  { icon: CircleDollarSign, label: "Invoicing" },
+  { icon: SquarePlay, label: "Content Library" },
+  { icon: Building2, label: "Brands" },
+  { icon: FileEdit, label: "External Reviews" },
 ];
 
 function Sidebar() {
+  const [expanded, setExpanded] = useState(true);
+
   return (
-    <aside className="w-[220px] flex-shrink-0 bg-bk-bg-sidebar border-r border-bk-border flex flex-col h-full">
-      <div className="flex items-center gap-2 px-5 py-5">
-        <BrkawayLogo size={18} color="#7f56d9" />
-        <span className="font-bold text-bk-text-primary text-lg">brkaway</span>
+    <aside
+      className={`${expanded ? "w-[220px]" : "w-[64px]"} flex-shrink-0 bg-bk-bg border-r border-bk-border flex flex-col h-full transition-all duration-150`}
+    >
+      <div className="flex items-center justify-between gap-2 px-5 py-5">
+        <div className={`flex items-center gap-2 overflow-hidden ${expanded ? "" : "opacity-0 w-0"}`}>
+          <BrkawayLogo size={18} color="#7f56d9" className="flex-shrink-0" />
+          <span className="font-medium text-bk-text-primary text-lg whitespace-nowrap">brkaway</span>
+        </div>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-shrink-0 text-bk-text-muted hover:text-bk-text-primary transition-colors"
+        >
+          {expanded ? <PanelLeftClose size={16} /> : <PanelLeftOpen size={16} />}
+        </button>
       </div>
-      <nav className="flex-1 px-3 space-y-0.5">
+      <nav className="flex-1 space-y-0.5">
         {NAV_ITEMS.map(({ icon: Icon, label, active }) => (
           <button
             key={label}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-              active
-                ? "bg-bk-purple-light text-bk-purple font-semibold"
-                : "text-bk-text-secondary hover:bg-bk-border-light"
+            className={`relative w-full flex items-center gap-3 pl-[22px] pr-3 h-9 text-sm font-medium transition-colors ${
+              active ? "text-bk-text-primary" : "text-bk-text-secondary hover:text-bk-text-primary"
             }`}
           >
-            <Icon size={16} className={active ? "text-bk-purple" : "text-bk-text-secondary"} />
-            {label}
+            {active && (
+              <span
+                className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
+                style={{ background: "var(--gradient-brand)" }}
+              />
+            )}
+            <Icon size={15} className="flex-shrink-0" />
+            {expanded && <span className="whitespace-nowrap">{label}</span>}
           </button>
         ))}
       </nav>
@@ -363,12 +380,17 @@ function EmptyState({ onCreateByURL }: { onCreateByURL: () => void }) {
 function URLModal({
   onClose,
   onSubmit,
+  initialIgUrl = "",
+  initialTtUrl = "",
 }: {
   onClose: () => void;
   onSubmit: (ig: string, tt: string, yt: string) => void;
+  initialIgUrl?: string;
+  initialTtUrl?: string;
 }) {
-  const [igUrl, setIgUrl] = useState("");
-  const [ttUrl, setTtUrl] = useState("");
+  const [igUrl, setIgUrl] = useState(initialIgUrl);
+  const [ttUrl, setTtUrl] = useState(initialTtUrl);
+  const isRegenerating = !!(initialIgUrl || initialTtUrl);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,9 +407,13 @@ function URLModal({
             <Link size={24} className="text-bk-purple" />
           </div>
           <div className="text-center">
-            <h2 className="text-xl font-bold text-bk-text-primary">Create Portfolio by URL</h2>
+            <h2 className="text-xl font-bold text-bk-text-primary">
+              {isRegenerating ? "Regenerate Portfolio by URL" : "Create Portfolio by URL"}
+            </h2>
             <p className="text-sm text-bk-text-secondary mt-1">
-              Paste your social media profile URLs and we&apos;ll automatically import your best content.
+              {isRegenerating
+                ? "Update your profile URLs or add a new platform, then refresh your portfolio."
+                : "Paste your social media profile URLs and we’ll automatically import your best content."}
             </p>
           </div>
         </div>
@@ -452,7 +478,7 @@ function URLModal({
               disabled={!igUrl && !ttUrl}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
             >
-              <span>✦</span> Generate Portfolio
+              <span>✦</span> {isRegenerating ? "Regenerate Portfolio" : "Generate Portfolio"}
             </button>
           </div>
         </form>
@@ -519,12 +545,14 @@ function ContentCard({
   platform,
   editMode,
   onDelete,
+  onOpen,
   dragProps,
 }: {
   post: CreatorPost;
   platform: Platform;
   editMode?: boolean;
   onDelete?: () => void;
+  onOpen?: () => void;
   dragProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const isIG = platform === "instagram";
@@ -594,13 +622,43 @@ function ContentCard({
   }
 
   return (
-    <a href={post.postUrl ?? "#"} target="_blank" rel="noopener noreferrer" className={className}>
+    <div onClick={onOpen} className={`${className} cursor-pointer`}>
       {content}
-    </a>
+    </div>
   );
 }
 
 // ─── Portfolio Result ────────────────────────────────────────────────────────
+
+const SORT_OPTIONS = [
+  { key: "default", label: "Default order" },
+  { key: "engagement_desc", label: "Most engaged first" },
+  { key: "engagement_asc", label: "Least engaged first" },
+  { key: "comments_asc", label: "Fewest comments first" },
+  { key: "comments_desc", label: "Most comments first" },
+] as const;
+
+type SortKey = (typeof SORT_OPTIONS)[number]["key"];
+
+function sortPosts<T extends { post: CreatorPost }>(items: T[], sortBy: SortKey): T[] {
+  if (sortBy === "default") return items;
+  const sorted = [...items];
+  sorted.sort((a, b) => {
+    switch (sortBy) {
+      case "engagement_desc":
+        return (b.post.likesCount + b.post.commentsCount) - (a.post.likesCount + a.post.commentsCount);
+      case "engagement_asc":
+        return (a.post.likesCount + a.post.commentsCount) - (b.post.likesCount + b.post.commentsCount);
+      case "comments_asc":
+        return a.post.commentsCount - b.post.commentsCount;
+      case "comments_desc":
+        return b.post.commentsCount - a.post.commentsCount;
+      default:
+        return 0;
+    }
+  });
+  return sorted;
+}
 
 function PortfolioResult({
   result,
@@ -608,16 +666,25 @@ function PortfolioResult({
   onToggleEdit,
   onDeletePost,
   onReorder,
+  onSaveSummary,
+  onRegenerateClick,
 }: {
   result: GenerateResponse;
   editMode: boolean;
   onToggleEdit: () => void;
   onDeletePost: (postId: string) => void;
   onReorder: (newOrder: { post: CreatorPost; platform: Platform }[]) => void;
+  onSaveSummary: (summary: string) => Promise<void>;
+  onRegenerateClick: () => void;
 }) {
   const [filter, setFilter] = useState<"all" | "instagram" | "tiktok">("all");
   const [dismissed, setDismissed] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<SortKey>("default");
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [summaryDraft, setSummaryDraft] = useState(result.aiAnalysis.summary);
+  const [savingSummary, setSavingSummary] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const allPosts = result.profiles.flatMap((p) =>
     p.recentPosts.map((post) => ({ post, platform: p.platform }))
@@ -626,7 +693,10 @@ function PortfolioResult({
   const igCount = result.profiles.find((p) => p.platform === "instagram")?.recentPosts.length ?? 0;
   const ttCount = result.profiles.find((p) => p.platform === "tiktok")?.recentPosts.length ?? 0;
 
-  const filtered = allPosts.filter(({ platform }) => filter === "all" || platform === filter);
+  const filtered = sortPosts(
+    allPosts.filter(({ platform }) => filter === "all" || platform === filter),
+    sortBy
+  );
 
   const handleDrop = (targetIndex: number) => {
     if (dragIndex === null || dragIndex === targetIndex) {
@@ -639,6 +709,27 @@ function PortfolioResult({
     setDragIndex(null);
     onReorder(reordered);
   };
+
+  const startEditingSummary = () => {
+    setSummaryDraft(result.aiAnalysis.summary);
+    setEditingSummary(true);
+  };
+
+  const handleSaveSummaryClick = async () => {
+    setSavingSummary(true);
+    try {
+      await onSaveSummary(summaryDraft);
+      setEditingSummary(false);
+    } finally {
+      setSavingSummary(false);
+    }
+  };
+
+  const closeLightbox = () => setLightboxIndex(null);
+  const showNextLightbox = () =>
+    setLightboxIndex((i) => (i === null ? null : (i + 1) % filtered.length));
+  const showPrevLightbox = () =>
+    setLightboxIndex((i) => (i === null ? null : (i - 1 + filtered.length) % filtered.length));
 
   return (
     <div className="flex-1 overflow-y-auto">
@@ -658,6 +749,15 @@ function PortfolioResult({
       )}
 
       <div className="p-8 space-y-6">
+        <div className="flex justify-end">
+          <button
+            onClick={onRegenerateClick}
+            className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
+          >
+            <span>✦</span> Regenerate Portfolio by URL
+          </button>
+        </div>
+
         {/* AI Summary */}
         <div className="bg-bk-bg border border-bk-border rounded-xl p-6 space-y-5">
           <div className="flex items-center justify-between">
@@ -667,10 +767,46 @@ function PortfolioResult({
               </div>
               <span className="font-semibold text-bk-text-primary text-sm">AI Creator Summary</span>
             </div>
-            <span className="text-xs text-bk-text-muted italic">Generated from public information</span>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-bk-text-muted italic">Generated from public information</span>
+              {!editingSummary && (
+                <button
+                  onClick={startEditingSummary}
+                  className="flex items-center gap-1 text-xs text-bk-text-secondary hover:text-bk-text-primary transition-colors"
+                >
+                  <Pencil size={12} /> Edit
+                </button>
+              )}
+            </div>
           </div>
 
-          <p className="text-sm text-bk-text-secondary leading-relaxed">{result.aiAnalysis.summary}</p>
+          {editingSummary ? (
+            <div className="space-y-3">
+              <textarea
+                value={summaryDraft}
+                onChange={(e) => setSummaryDraft(e.target.value)}
+                rows={5}
+                className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary leading-relaxed focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditingSummary(false)}
+                  className="px-4 py-2 border border-bk-border rounded-xl text-xs font-medium text-bk-text-secondary hover:bg-bk-bg-light transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveSummaryClick}
+                  disabled={savingSummary}
+                  className="px-4 py-2 bg-bk-purple text-white rounded-xl text-xs font-medium hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
+                >
+                  {savingSummary ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-bk-text-secondary leading-relaxed">{result.aiAnalysis.summary}</p>
+          )}
 
           <div className="grid grid-cols-3 gap-4 pt-2 border-t border-bk-border-light">
             <div>
@@ -683,9 +819,7 @@ function PortfolioResult({
             </div>
             <div>
               <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-2">Audience</p>
-              <span className="px-2.5 py-1 bg-bk-bg-light border border-bk-border text-bk-text-secondary text-xs rounded-full">
-                {result.aiAnalysis.audience}
-              </span>
+              <p className="text-sm text-bk-text-secondary leading-relaxed">{result.aiAnalysis.audience}</p>
             </div>
             <div>
               <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-2">Primary Language</p>
@@ -744,12 +878,19 @@ function PortfolioResult({
               >
                 <Pencil size={12} /> {editMode ? "Done Editing" : "Edit Portfolio"}
               </button>
-              <button className="flex items-center gap-1.5 border border-bk-border rounded-lg px-3 py-1.5 text-xs text-bk-text-secondary hover:bg-bk-bg-light transition-colors">
-                <Search size={12} /> Search
-              </button>
-              <button className="flex items-center gap-1.5 border border-bk-border rounded-lg px-3 py-1.5 text-xs text-bk-text-secondary hover:bg-bk-bg-light transition-colors">
-                <SlidersHorizontal size={12} /> Sort
-              </button>
+              <div className="relative flex items-center gap-1.5 border border-bk-border rounded-lg px-3 py-1.5 text-xs text-bk-text-secondary hover:bg-bk-bg-light transition-colors">
+                <SlidersHorizontal size={12} />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortKey)}
+                  disabled={editMode}
+                  className="bg-transparent focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {SORT_OPTIONS.map(({ key, label }) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -765,6 +906,7 @@ function PortfolioResult({
                 platform={platform}
                 editMode={editMode}
                 onDelete={post.id ? () => onDeletePost(post.id!) : undefined}
+                onOpen={editMode ? undefined : () => setLightboxIndex(i)}
                 dragProps={
                   editMode
                     ? {
@@ -779,6 +921,109 @@ function PortfolioResult({
               />
             ))}
           </div>
+        </div>
+      </div>
+
+      {lightboxIndex !== null && filtered[lightboxIndex] && (
+        <PostLightbox
+          post={filtered[lightboxIndex].post}
+          platform={filtered[lightboxIndex].platform}
+          onClose={closeLightbox}
+          onNext={showNextLightbox}
+          onPrev={showPrevLightbox}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Post Lightbox ───────────────────────────────────────────────────────────
+
+function PostLightbox({
+  post,
+  platform,
+  onClose,
+  onNext,
+  onPrev,
+}: {
+  post: CreatorPost;
+  platform: Platform;
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+}) {
+  const isIG = platform === "instagram";
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") onNext();
+      if (e.key === "ArrowLeft") onPrev();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose, onNext, onPrev]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+
+      <button
+        onClick={onClose}
+        className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+      >
+        <X size={18} />
+      </button>
+
+      <button
+        onClick={onPrev}
+        className="absolute left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+        aria-label="Previous"
+      >
+        ‹
+      </button>
+      <button
+        onClick={onNext}
+        className="absolute right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+        aria-label="Next"
+      >
+        ›
+      </button>
+
+      <div className="relative bg-bk-bg rounded-2xl overflow-hidden shadow-2xl w-[420px] max-h-[85vh] flex flex-col">
+        <div className="relative aspect-square bg-bk-border-light flex-shrink-0">
+          {post.thumbnailUrl ? (
+            <Image src={post.thumbnailUrl} alt={post.caption.slice(0, 60) || "Post"} fill className="object-cover" />
+          ) : (
+            <div className="absolute inset-0 bg-bk-border-light" />
+          )}
+        </div>
+        <div className="p-4 space-y-2 overflow-y-auto">
+          <span
+            className={`inline-block px-2.5 py-0.5 rounded-full text-white text-xs font-semibold ${
+              isIG ? "bg-gradient-to-r from-purple-500 to-pink-500" : "bg-black"
+            }`}
+          >
+            {isIG ? "Instagram" : "TikTok"}
+          </span>
+          <p className="text-sm text-bk-text-primary leading-relaxed">{post.caption || "—"}</p>
+          <div className="flex items-center gap-3 text-bk-text-muted text-xs pt-1">
+            <span className="flex items-center gap-1"><Heart size={12} /> {fmt(post.likesCount)}</span>
+            <span className="flex items-center gap-1"><MessageCircle size={12} /> {fmt(post.commentsCount)}</span>
+            {post.viewsCount !== undefined && post.viewsCount > 0 && (
+              <span className="flex items-center gap-1"><Eye size={12} /> {fmt(post.viewsCount)}</span>
+            )}
+          </div>
+          {post.postUrl && (
+            <a
+              href={post.postUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-xs text-bk-purple hover:underline pt-1"
+            >
+              View original post ↗
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -1194,6 +1439,23 @@ export default function Home() {
     setProfileOverrides(saved);
   };
 
+  const handleSaveSummary = async (summary: string) => {
+    if (!result) return;
+    const snapshot = result;
+    setResult({ ...result, aiAnalysis: { ...result.aiAnalysis, summary } });
+
+    const res = await fetch("/api/portfolio/ai-summary", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ summary }),
+    });
+    if (!res.ok) {
+      setResult(snapshot);
+      setError("No se pudo guardar el resumen. Intentá de nuevo.");
+      throw new Error("save summary failed");
+    }
+  };
+
   useEffect(() => () => stopStepAnimation(), []);
 
   if (initializing) {
@@ -1239,6 +1501,8 @@ export default function Home() {
                 onToggleEdit={() => setEditMode((v) => !v)}
                 onDeletePost={handleDeletePost}
                 onReorder={handleReorder}
+                onSaveSummary={handleSaveSummary}
+                onRegenerateClick={() => setPageState("modal")}
               />
             )}
             {pageState === "result" && result && activeTab === "About" && (
@@ -1261,8 +1525,18 @@ export default function Home() {
 
       {pageState === "modal" && (
         <URLModal
-          onClose={() => setPageState("empty")}
+          onClose={() => setPageState(result ? "result" : "empty")}
           onSubmit={handleGenerate}
+          initialIgUrl={
+            result?.profiles.find((p) => p.platform === "instagram")?.username
+              ? `https://instagram.com/${result.profiles.find((p) => p.platform === "instagram")!.username}`
+              : ""
+          }
+          initialTtUrl={
+            result?.profiles.find((p) => p.platform === "tiktok")?.username
+              ? `https://www.tiktok.com/@${result.profiles.find((p) => p.platform === "tiktok")!.username}`
+              : ""
+          }
         />
       )}
 

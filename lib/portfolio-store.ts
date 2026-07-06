@@ -266,3 +266,15 @@ export async function saveProfileOverrides(overrides: ProfileOverrides): Promise
   if (error) throw error;
   return overrides;
 }
+
+export async function saveAiSummary(summary: string): Promise<string> {
+  const supabase = getSupabaseAdmin();
+  const portfolioId = await getOrCreatePortfolioId();
+
+  const { error } = await supabase
+    .from("ai_analyses")
+    .upsert({ portfolio_id: portfolioId, summary }, { onConflict: "portfolio_id" });
+
+  if (error) throw error;
+  return summary;
+}
