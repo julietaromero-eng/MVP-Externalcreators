@@ -12,6 +12,22 @@ function extractTikTokUsername(url: string): string {
   return match ? match[1] : trimmed;
 }
 
+// The IG scraper API is intermittently unstable (shared scraping IP getting
+// throttled by Instagram) — retry transient failures a couple times before
+// giving up, since most clear within a few seconds.
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 2,
+  delayMs = 1500
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, options);
+    if (res.ok || attempt >= retries || (res.status !== 429 && res.status < 500)) return res;
+    await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
+  }
+}
+
 const FEED_POST_TARGET = 20;
 
 // The feed endpoint paginates in pages of ~12 items. Pagination cursor param
@@ -31,7 +47,7 @@ async function fetchInstagramFeedItems(
     url.searchParams.set("user_id", String(userId));
     if (nextMaxId) url.searchParams.set("next_max_id", nextMaxId);
 
-    const res = await fetch(url.toString(), { headers });
+    const res = await fetchWithRetry(url.toString(), { headers });
     if (!res.ok) throw new Error(`Feed fetch failed: ${res.status}`);
     const data = await res.json();
     const pageItems = (data.items ?? []) as Record<string, unknown>[];
@@ -52,7 +68,7 @@ export async function scrapeInstagram(url: string) {
 
   const username = extractIgUsername(url);
 
-  const profileRes = await fetch(
+  const profileRes = await fetchWithRetry(
     `https://${host}/profile?username=${encodeURIComponent(username)}`,
     { headers }
   );

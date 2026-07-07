@@ -14,14 +14,34 @@ export async function POST(request: Request) {
       return Response.json({ error: "Ingresá al menos una URL" }, { status: 400 });
     }
 
+    let instagramError: string | null = null;
+    let tiktokError: string | null = null;
+
     const [instagramRaw, tiktokRaw] = await Promise.all([
-      instagramUrl ? scrapeInstagram(instagramUrl).catch((e) => { console.error("IG scrape error:", e?.message ?? e); return null; }) : null,
-      tiktokUrl ? scrapeTikTok(tiktokUrl).catch((e) => { console.error("TT scrape error:", e?.message ?? e); return null; }) : null,
+      instagramUrl
+        ? scrapeInstagram(instagramUrl).catch((e) => {
+            instagramError = e?.message ?? String(e);
+            console.error("IG scrape error:", instagramError);
+            return null;
+          })
+        : null,
+      tiktokUrl
+        ? scrapeTikTok(tiktokUrl).catch((e) => {
+            tiktokError = e?.message ?? String(e);
+            console.error("TT scrape error:", tiktokError);
+            return null;
+          })
+        : null,
     ]);
 
     if (!instagramRaw && !tiktokRaw && !youtubeUrl) {
+      const isRateLimited = instagramError?.includes("429") || tiktokError?.includes("429");
       return Response.json(
-        { error: "No se pudo obtener información. Verificá que las URLs sean correctas y los perfiles sean públicos." },
+        {
+          error: isRateLimited
+            ? "Instagram está inestable en este momento (límite temporal del proveedor). Probá de nuevo en unos minutos."
+            : "No se pudo obtener información. Verificá que las URLs sean correctas y los perfiles sean públicos.",
+        },
         { status: 422 }
       );
     }
