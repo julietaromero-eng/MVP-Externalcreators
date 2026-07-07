@@ -1691,12 +1691,12 @@ export default function Home() {
           setPageState("result");
         }, 800);
       } else {
-        setError(data.error ?? "Error al generar el portfolio");
+        setError(data.error ?? "Error generating portfolio");
         setPageState("empty");
       }
     } catch {
       stopStepAnimation();
-      setError("Error de conexión. Intentá de nuevo.");
+      setError("Connection error. Please try again.");
       setPageState("empty");
     }
   };
@@ -1720,7 +1720,7 @@ export default function Home() {
       .then((res) => { if (!res.ok) throw new Error(); })
       .catch(() => {
         setResult(snapshot);
-        setError("No se pudo eliminar la foto. Intentá de nuevo.");
+        setError("Couldn't delete the photo. Please try again.");
       });
   };
 
@@ -1756,7 +1756,7 @@ export default function Home() {
       .then((res) => { if (!res.ok) throw new Error(); })
       .catch(() => {
         setResult(snapshot);
-        setError("No se pudo guardar el nuevo orden. Intentá de nuevo.");
+        setError("Couldn't save the new order. Please try again.");
       });
   };
 
@@ -1767,7 +1767,7 @@ export default function Home() {
       body: JSON.stringify(updated),
     });
     if (!res.ok) {
-      setError("No se pudo guardar la información. Intentá de nuevo.");
+      setError("Couldn't save the information. Please try again.");
       throw new Error("save about failed");
     }
     const saved = await res.json();
@@ -1781,7 +1781,7 @@ export default function Home() {
       body: JSON.stringify(updated),
     });
     if (!res.ok) {
-      setError("No se pudo guardar el perfil. Intentá de nuevo.");
+      setError("Couldn't save the profile. Please try again.");
       throw new Error("save profile failed");
     }
     const saved = await res.json();
@@ -1800,7 +1800,7 @@ export default function Home() {
     });
     if (!res.ok) {
       setResult(snapshot);
-      setError("No se pudo guardar el resumen. Intentá de nuevo.");
+      setError("Couldn't save the summary. Please try again.");
       throw new Error("save summary failed");
     }
   };

@@ -11,36 +11,30 @@ export async function POST(request: Request) {
     const { instagramUrl, tiktokUrl, youtubeUrl } = await request.json();
 
     if (!instagramUrl && !tiktokUrl && !youtubeUrl) {
-      return Response.json({ error: "Ingresá al menos una URL" }, { status: 400 });
+      return Response.json({ error: "Enter at least one URL" }, { status: 400 });
     }
 
-    let instagramError: string | null = null;
-    let tiktokError: string | null = null;
-
-    const [instagramRaw, tiktokRaw] = await Promise.all([
-      instagramUrl
-        ? scrapeInstagram(instagramUrl).catch((e) => {
-            instagramError = e?.message ?? String(e);
-            console.error("IG scrape error:", instagramError);
-            return null;
-          })
-        : null,
-      tiktokUrl
-        ? scrapeTikTok(tiktokUrl).catch((e) => {
-            tiktokError = e?.message ?? String(e);
-            console.error("TT scrape error:", tiktokError);
-            return null;
-          })
-        : null,
+    const [instagramResult, tiktokResult] = await Promise.allSettled([
+      instagramUrl ? scrapeInstagram(instagramUrl) : Promise.resolve(null),
+      tiktokUrl ? scrapeTikTok(tiktokUrl) : Promise.resolve(null),
     ]);
 
+    if (instagramResult.status === "rejected") console.error("IG scrape error:", instagramResult.reason);
+    if (tiktokResult.status === "rejected") console.error("TT scrape error:", tiktokResult.reason);
+
+    const instagramRaw = instagramResult.status === "fulfilled" ? instagramResult.value : null;
+    const tiktokRaw = tiktokResult.status === "fulfilled" ? tiktokResult.value : null;
+
     if (!instagramRaw && !tiktokRaw && !youtubeUrl) {
-      const isRateLimited = instagramError?.includes("429") || tiktokError?.includes("429");
+      const errorMessage = (result: PromiseSettledResult<unknown>) =>
+        result.status === "rejected" ? String(result.reason?.message ?? result.reason) : "";
+      const isRateLimited =
+        errorMessage(instagramResult).includes("429") || errorMessage(tiktokResult).includes("429");
       return Response.json(
         {
           error: isRateLimited
-            ? "Instagram está inestable en este momento (límite temporal del proveedor). Probá de nuevo en unos minutos."
-            : "No se pudo obtener información. Verificá que las URLs sean correctas y los perfiles sean públicos.",
+            ? "Instagram is temporarily unstable (provider-side rate limit). Please try again in a few minutes."
+            : "Couldn't fetch the profile information. Check that the URLs are correct and the profiles are public.",
         },
         { status: 422 }
       );
@@ -68,6 +62,6 @@ export async function POST(request: Request) {
     return Response.json(responseBody);
   } catch (error) {
     console.error("Generate error:", error);
-    return Response.json({ error: "Error interno del servidor" }, { status: 500 });
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }

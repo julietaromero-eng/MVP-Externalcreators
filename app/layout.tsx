@@ -12,7 +12,7 @@ const circularStd = localFont({
 
 export const metadata: Metadata = {
   title: "Brkaway – Portfolio Generator",
-  description: "Generá portfolios de creators a partir de información pública",
+  description: "Generate creator portfolios from public social information",
 };
 
 export default function RootLayout({

@@ -7,6 +7,6 @@ export async function GET() {
     return Response.json(portfolio);
   } catch (error) {
     console.error("Load portfolio error:", error);
-    return Response.json({ error: "Error interno del servidor" }, { status: 500 });
+    return Response.json({ error: "Internal server error" }, { status: 500 });
   }
 }
