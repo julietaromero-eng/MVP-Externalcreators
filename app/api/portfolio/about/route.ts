@@ -3,8 +3,11 @@ import type { PortfolioAbout } from "@/lib/types";
 
 export async function PATCH(request: Request) {
   try {
-    const body = (await request.json()) as PortfolioAbout;
-    const about = await saveAbout({
+    const body = (await request.json()) as PortfolioAbout & { portfolioId: string };
+    if (!body.portfolioId) {
+      return Response.json({ error: "portfolioId is required" }, { status: 400 });
+    }
+    const about = await saveAbout(body.portfolioId, {
       bio: body.bio ?? "",
       hobbiesAndPassions: body.hobbiesAndPassions ?? "",
       industries: Array.isArray(body.industries) ? body.industries : [],

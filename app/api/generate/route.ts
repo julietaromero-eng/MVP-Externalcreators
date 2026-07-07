@@ -8,7 +8,7 @@ export const maxDuration = 300;
 
 export async function POST(request: Request) {
   try {
-    const { instagramUrl, tiktokUrl, youtubeUrl } = await request.json();
+    const { instagramUrl, tiktokUrl, youtubeUrl, portfolioId } = await request.json();
 
     if (!instagramUrl && !tiktokUrl && !youtubeUrl) {
       return Response.json({ error: "Enter at least one URL" }, { status: 400 });
@@ -49,11 +49,11 @@ export async function POST(request: Request) {
     const aiAnalysis = await generateCreatorAnalysis(profiles);
     const generatedAt = new Date().toISOString();
 
-    let responseBody: GenerateResponse = { profiles, aiAnalysis, generatedAt };
+    let responseBody: GenerateResponse = { id: portfolioId ?? "", profiles, aiAnalysis, generatedAt };
 
     try {
-      await saveGeneratedPortfolio(profiles, aiAnalysis);
-      const persisted = await loadPortfolio();
+      const savedId = await saveGeneratedPortfolio(profiles, aiAnalysis, portfolioId);
+      const persisted = await loadPortfolio(savedId);
       if (persisted) responseBody = persisted;
     } catch (e) {
       console.error("Portfolio persistence error:", e);

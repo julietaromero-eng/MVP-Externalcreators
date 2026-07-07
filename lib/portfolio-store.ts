@@ -6,6 +6,7 @@ import type {
   CreatorProfile,
   Platform,
   PortfolioAbout,
+  PortfolioSummary,
   ProfileOverrides,
   ProfileStatus,
   SocialLinks,
@@ -25,17 +26,8 @@ const EMPTY_SOCIAL_LINKS: SocialLinks = {
 
 const EMPTY_BOOKING_LINKS: BookingLinks = { calendly: "" };
 
-async function getOrCreatePortfolioId(): Promise<string> {
+async function createPortfolio(): Promise<string> {
   const supabase = getSupabaseAdmin();
-
-  const { data: existing } = await supabase
-    .from("portfolios")
-    .select("id")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) return existing.id as string;
 
   const { data: created, error } = await supabase
     .from("portfolios")
@@ -45,6 +37,49 @@ async function getOrCreatePortfolioId(): Promise<string> {
 
   if (error) throw error;
   return created.id as string;
+}
+
+export async function listPortfolios(): Promise<PortfolioSummary[]> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: portfolioRows, error: portfoliosError } = await supabase
+    .from("portfolios")
+    .select("id, display_name, profile_pic_url, generated_at")
+    .not("generated_at", "is", null)
+    .order("generated_at", { ascending: false });
+  if (portfoliosError) throw portfoliosError;
+  if (!portfolioRows || portfolioRows.length === 0) return [];
+
+  const portfolioIds = portfolioRows.map((row) => row.id as string);
+  const { data: profileRows, error: profilesError } = await supabase
+    .from("profiles")
+    .select("portfolio_id, platform, username, display_name, profile_pic_url")
+    .in("portfolio_id", portfolioIds);
+  if (profilesError) throw profilesError;
+
+  const profilesByPortfolio = new Map<string, Record<string, unknown>[]>();
+  for (const row of profileRows ?? []) {
+    const key = row.portfolio_id as string;
+    if (!profilesByPortfolio.has(key)) profilesByPortfolio.set(key, []);
+    profilesByPortfolio.get(key)!.push(row);
+  }
+
+  return portfolioRows.map((row) => {
+    const profiles = profilesByPortfolio.get(row.id as string) ?? [];
+    const primary = profiles.find((p) => p.platform === "instagram") ?? profiles[0];
+    return {
+      id: row.id as string,
+      displayName:
+        (row.display_name as string) ||
+        (primary?.display_name as string) ||
+        (primary?.username as string) ||
+        "Untitled",
+      username: (primary?.username as string) ?? "",
+      profilePicUrl: (row.profile_pic_url as string) || (primary?.profile_pic_url as string) || null,
+      platforms: profiles.map((p) => p.platform as Platform),
+      generatedAt: (row.generated_at as string) ?? null,
+    };
+  });
 }
 
 function postRowToCreatorPost(row: Record<string, unknown>): CreatorPost {
@@ -87,10 +122,11 @@ function profileUrl(profile: CreatorProfile): string {
 
 export async function saveGeneratedPortfolio(
   profiles: CreatorProfile[],
-  aiAnalysis: AIAnalysis
-): Promise<void> {
+  aiAnalysis: AIAnalysis,
+  existingPortfolioId?: string
+): Promise<string> {
   const supabase = getSupabaseAdmin();
-  const portfolioId = await getOrCreatePortfolioId();
+  const portfolioId = existingPortfolioId ?? (await createPortfolio());
 
   const { data: current } = await supabase
     .from("portfolios")
@@ -177,9 +213,12 @@ export async function saveGeneratedPortfolio(
     { onConflict: "portfolio_id" }
   );
   if (aiError) throw aiError;
+
+  return portfolioId;
 }
 
 export interface LoadedPortfolio {
+  id: string;
   profiles: CreatorProfile[];
   aiAnalysis: AIAnalysis;
   generatedAt: string;
@@ -187,15 +226,18 @@ export interface LoadedPortfolio {
   profileOverrides: ProfileOverrides;
 }
 
-export async function loadPortfolio(): Promise<LoadedPortfolio | null> {
+export async function loadPortfolio(portfolioId?: string): Promise<LoadedPortfolio | null> {
   const supabase = getSupabaseAdmin();
 
-  const { data: portfolio } = await supabase
-    .from("portfolios")
-    .select("*")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const { data: portfolio } = portfolioId
+    ? await supabase.from("portfolios").select("*").eq("id", portfolioId).maybeSingle()
+    : await supabase
+        .from("portfolios")
+        .select("*")
+        .not("generated_at", "is", null)
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
   if (!portfolio || !portfolio.generated_at) return null;
 
@@ -237,6 +279,7 @@ export async function loadPortfolio(): Promise<LoadedPortfolio | null> {
   };
 
   return {
+    id: portfolio.id as string,
     profiles,
     aiAnalysis,
     generatedAt: portfolio.generated_at as string,
@@ -280,9 +323,8 @@ export async function applyPostOperations(operations: PostOperation[]): Promise<
   );
 }
 
-export async function saveAbout(about: PortfolioAbout): Promise<PortfolioAbout> {
+export async function saveAbout(portfolioId: string, about: PortfolioAbout): Promise<PortfolioAbout> {
   const supabase = getSupabaseAdmin();
-  const portfolioId = await getOrCreatePortfolioId();
 
   const { error } = await supabase
     .from("portfolios")
@@ -306,9 +348,11 @@ export async function saveAbout(about: PortfolioAbout): Promise<PortfolioAbout> 
   return about;
 }
 
-export async function saveProfileOverrides(overrides: ProfileOverrides): Promise<ProfileOverrides> {
+export async function saveProfileOverrides(
+  portfolioId: string,
+  overrides: ProfileOverrides
+): Promise<ProfileOverrides> {
   const supabase = getSupabaseAdmin();
-  const portfolioId = await getOrCreatePortfolioId();
 
   const { error } = await supabase
     .from("portfolios")
@@ -322,9 +366,8 @@ export async function saveProfileOverrides(overrides: ProfileOverrides): Promise
   return overrides;
 }
 
-export async function saveAiSummary(summary: string): Promise<string> {
+export async function saveAiSummary(portfolioId: string, summary: string): Promise<string> {
   const supabase = getSupabaseAdmin();
-  const portfolioId = await getOrCreatePortfolioId();
 
   const { error } = await supabase
     .from("ai_analyses")

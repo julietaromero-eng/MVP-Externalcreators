@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import {
   LayoutDashboard, Bell, MessageSquare, Briefcase, Handshake,
-  Megaphone, Images, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap,
+  Megaphone, Images, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
   Heart, MessageCircle, Eye, GripVertical, Globe, Video,
 } from "lucide-react";
@@ -12,7 +12,7 @@ import {
   FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
 } from "react-icons/fa6";
 import { BrkawayLogo } from "@/lib/BrkawayLogo";
-import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides } from "@/lib/types";
+import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary } from "@/lib/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -43,21 +43,24 @@ function buildLoadingSteps(igUrl: string, ttUrl: string, ytUrl: string): string[
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS = [
+type MainView = "portfolio" | "creators";
+
+const NAV_ITEMS: { icon: typeof LayoutDashboard; label: string; view?: MainView }[] = [
   { icon: LayoutDashboard, label: "Dashboard" },
   { icon: Bell, label: "Notifications" },
   { icon: MessageSquare, label: "Messages" },
   { icon: Briefcase, label: "Deliverables" },
   { icon: Handshake, label: "Collabs" },
   { icon: Megaphone, label: "Opportunities" },
-  { icon: Images, label: "Portfolio", active: true },
+  { icon: Users, label: "Creators", view: "creators" },
+  { icon: Images, label: "Portfolio", view: "portfolio" },
   { icon: CircleDollarSign, label: "Invoicing" },
   { icon: SquarePlay, label: "Content Library" },
   { icon: Building2, label: "Brands" },
   { icon: FileEdit, label: "External Reviews" },
 ];
 
-function Sidebar() {
+function Sidebar({ view, onNavigate }: { view: MainView; onNavigate: (view: MainView) => void }) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -77,23 +80,31 @@ function Sidebar() {
         </button>
       </div>
       <nav className="flex-1 space-y-0.5">
-        {NAV_ITEMS.map(({ icon: Icon, label, active }) => (
-          <button
-            key={label}
-            className={`relative w-full flex items-center gap-3 pl-[22px] pr-3 h-9 text-sm font-medium transition-colors ${
-              active ? "text-bk-text-primary" : "text-bk-text-secondary hover:text-bk-text-primary"
-            }`}
-          >
-            {active && (
-              <span
-                className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
-                style={{ background: "var(--gradient-brand)" }}
-              />
-            )}
-            <Icon size={15} className="flex-shrink-0" />
-            {expanded && <span className="whitespace-nowrap">{label}</span>}
-          </button>
-        ))}
+        {NAV_ITEMS.map(({ icon: Icon, label, view: itemView }) => {
+          const active = itemView !== undefined && itemView === view;
+          return (
+            <button
+              key={label}
+              onClick={itemView ? () => onNavigate(itemView) : undefined}
+              className={`relative w-full flex items-center gap-3 pl-[22px] pr-3 h-9 text-sm font-medium transition-colors ${
+                active
+                  ? "text-bk-text-primary"
+                  : itemView
+                    ? "text-bk-text-secondary hover:text-bk-text-primary"
+                    : "text-bk-text-secondary cursor-default"
+              }`}
+            >
+              {active && (
+                <span
+                  className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
+                  style={{ background: "var(--gradient-brand)" }}
+                />
+              )}
+              <Icon size={15} className="flex-shrink-0" />
+              {expanded && <span className="whitespace-nowrap">{label}</span>}
+            </button>
+          );
+        })}
       </nav>
     </aside>
   );
@@ -1482,6 +1493,93 @@ function AboutTab({
   );
 }
 
+// ─── Creators View ───────────────────────────────────────────────────────────
+
+function CreatorsView({
+  creators,
+  loading,
+  onSelect,
+  onCreateNew,
+}: {
+  creators: PortfolioSummary[];
+  loading: boolean;
+  onSelect: (id: string) => void;
+  onCreateNew: () => void;
+}) {
+  return (
+    <div className="flex-1 overflow-y-auto p-8">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-xl font-bold text-bk-text-primary mb-1">Creators</h2>
+          <p className="text-sm text-bk-text-secondary">All portfolios generated so far. Click one to open it.</p>
+        </div>
+        <button
+          onClick={onCreateNew}
+          className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
+        >
+          <span>✦</span> New Creator
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 size={24} className="text-bk-purple animate-spin" />
+        </div>
+      ) : creators.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="w-14 h-14 bg-bk-purple-light rounded-full flex items-center justify-center mb-4">
+            <Users size={24} className="text-bk-purple" />
+          </div>
+          <h3 className="text-lg font-bold text-bk-text-primary mb-2">No creators yet</h3>
+          <p className="text-sm text-bk-text-secondary max-w-sm">Generate your first portfolio to see it here.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-4 gap-4">
+          {creators.map((creator) => (
+            <button
+              key={creator.id}
+              onClick={() => onSelect(creator.id)}
+              className="flex flex-col items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-5 hover:shadow-md hover:border-bk-purple/30 transition-all text-center"
+            >
+              <div className="w-16 h-16 rounded-full overflow-hidden bg-bk-border-light flex-shrink-0 flex items-center justify-center">
+                {creator.profilePicUrl ? (
+                  <Image
+                    src={creator.profilePicUrl}
+                    alt={creator.displayName}
+                    width={64}
+                    height={64}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-bk-text-muted text-xl font-semibold">
+                    {creator.displayName.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 w-full">
+                <p className="font-semibold text-bk-text-primary text-sm line-clamp-1">{creator.displayName}</p>
+                {creator.username && (
+                  <p className="text-xs text-bk-text-muted line-clamp-1">@{creator.username}</p>
+                )}
+              </div>
+              {creator.platforms.length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  {creator.platforms.includes("instagram") && (
+                    <FaInstagram size={12} className="text-[#E1306C]" />
+                  )}
+                  {creator.platforms.includes("tiktok") && (
+                    <FaTiktok size={12} className="text-bk-text-primary" />
+                  )}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Coming Soon Tab ─────────────────────────────────────────────────────────
 
 function ComingSoonTab({ label }: { label: string }) {
@@ -1618,11 +1716,16 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const [view, setView] = useState<MainView>("portfolio");
   const [pageState, setPageState] = useState<PageState>("empty");
   const [initializing, setInitializing] = useState(true);
   const [completedSteps, setCompletedSteps] = useState(0);
   const [loadingSteps, setLoadingSteps] = useState<string[]>(BASE_LOADING_STEPS);
   const [result, setResult] = useState<GenerateResponse | null>(null);
+  const [activePortfolioId, setActivePortfolioId] = useState<string | null>(null);
+  const [modalTargetId, setModalTargetId] = useState<string | null>(null);
+  const [creators, setCreators] = useState<PortfolioSummary[]>([]);
+  const [loadingCreators, setLoadingCreators] = useState(false);
   const [about, setAbout] = useState<PortfolioAbout | null>(null);
   const [profileOverrides, setProfileOverrides] = useState<ProfileOverrides | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -1636,15 +1739,51 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => {
         if (data?.profiles) {
-          setResult({ profiles: data.profiles, aiAnalysis: data.aiAnalysis, generatedAt: data.generatedAt });
+          setResult({ id: data.id, profiles: data.profiles, aiAnalysis: data.aiAnalysis, generatedAt: data.generatedAt });
           setAbout(data.about ?? null);
           setProfileOverrides(data.profileOverrides ?? null);
+          setActivePortfolioId(data.id);
           setPageState("result");
         }
       })
       .catch(() => {})
       .finally(() => setInitializing(false));
   }, []);
+
+  const loadCreators = () => {
+    setLoadingCreators(true);
+    fetch("/api/portfolios")
+      .then((res) => res.json())
+      .then((data) => setCreators(data.portfolios ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingCreators(false));
+  };
+
+  const handleNavigate = (nextView: MainView) => {
+    setView(nextView);
+    if (nextView === "creators") loadCreators();
+  };
+
+  const handleSelectCreator = async (id: string) => {
+    setInitializing(true);
+    setView("portfolio");
+    try {
+      const res = await fetch(`/api/portfolio?id=${id}`);
+      const data = await res.json();
+      if (data?.profiles) {
+        setResult({ id: data.id, profiles: data.profiles, aiAnalysis: data.aiAnalysis, generatedAt: data.generatedAt });
+        setAbout(data.about ?? null);
+        setProfileOverrides(data.profileOverrides ?? null);
+        setActivePortfolioId(data.id);
+        setActiveTab("Portfolio");
+        setPageState("result");
+      }
+    } catch {
+      setError("Couldn't load that creator's portfolio. Please try again.");
+    } finally {
+      setInitializing(false);
+    }
+  };
 
   const startStepAnimation = (stepCount: number) => {
     setCompletedSteps(0);
@@ -1676,7 +1815,12 @@ export default function Home() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instagramUrl: igUrl, tiktokUrl: ttUrl, youtubeUrl: ytUrl || undefined }),
+        body: JSON.stringify({
+          instagramUrl: igUrl,
+          tiktokUrl: ttUrl,
+          youtubeUrl: ytUrl || undefined,
+          portfolioId: modalTargetId ?? undefined,
+        }),
       });
       const data = await res.json();
       stopStepAnimation();
@@ -1687,7 +1831,9 @@ export default function Home() {
           setResult(data);
           setAbout(data.about ?? null);
           setProfileOverrides(data.profileOverrides ?? null);
+          setActivePortfolioId(data.id);
           setActiveTab("Portfolio");
+          setView("portfolio");
           setPageState("result");
         }, 800);
       } else {
@@ -1761,10 +1907,11 @@ export default function Home() {
   };
 
   const handleSaveAbout = async (updated: PortfolioAbout) => {
+    if (!activePortfolioId) return;
     const res = await fetch("/api/portfolio/about", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updated),
+      body: JSON.stringify({ ...updated, portfolioId: activePortfolioId }),
     });
     if (!res.ok) {
       setError("Couldn't save the information. Please try again.");
@@ -1775,10 +1922,11 @@ export default function Home() {
   };
 
   const handleSaveProfile = async (updated: ProfileOverrides) => {
+    if (!activePortfolioId) return;
     const res = await fetch("/api/portfolio/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updated),
+      body: JSON.stringify({ ...updated, portfolioId: activePortfolioId }),
     });
     if (!res.ok) {
       setError("Couldn't save the profile. Please try again.");
@@ -1789,14 +1937,14 @@ export default function Home() {
   };
 
   const handleSaveSummary = async (summary: string) => {
-    if (!result) return;
+    if (!result || !activePortfolioId) return;
     const snapshot = result;
     setResult({ ...result, aiAnalysis: { ...result.aiAnalysis, summary } });
 
     const res = await fetch("/api/portfolio/ai-summary", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ summary }),
+      body: JSON.stringify({ summary, portfolioId: activePortfolioId }),
     });
     if (!res.ok) {
       setResult(snapshot);
@@ -1816,75 +1964,101 @@ export default function Home() {
   }
 
   const firstProfile = result?.profiles[0];
-  const showRightPanel = pageState !== "loading";
+  const showRightPanel = pageState !== "loading" && view === "portfolio";
+
+  const openNewCreatorModal = () => {
+    setModalTargetId(null);
+    setPageState("modal");
+  };
 
   return (
     <div className="flex h-screen bg-bk-bg-light overflow-hidden">
-      <Sidebar />
+      <Sidebar view={view} onNavigate={handleNavigate} />
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <ProfileHeader
-          profile={firstProfile}
-          profiles={result?.profiles ?? []}
-          overrides={profileOverrides}
-          onEditClick={() => setEditingProfile(true)}
-        />
-        <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
-
-        {error && (
-          <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-            <X size={14} className="text-red-500" />
-            <p className="text-sm text-red-700">{error}</p>
-            <button onClick={() => setError(null)} className="ml-auto"><X size={14} className="text-red-400" /></button>
-          </div>
-        )}
-
-        <div className="flex flex-1 overflow-hidden">
-          {/* Main content */}
-          <div className="flex flex-1 overflow-hidden">
-            {pageState === "empty" && <EmptyState onCreateByURL={() => setPageState("modal")} />}
-            {pageState === "loading" && <LoadingState completedSteps={completedSteps} steps={loadingSteps} />}
-            {pageState === "result" && result && activeTab === "Portfolio" && (
-              <PortfolioResult
-                result={result}
-                editMode={editMode}
-                onToggleEdit={() => setEditMode((v) => !v)}
-                onDeletePost={handleDeletePost}
-                onReorder={handleReorder}
-                onSaveSummary={handleSaveSummary}
-                onRegenerateClick={() => setPageState("modal")}
-              />
-            )}
-            {pageState === "result" && result && activeTab === "About" && (
-              <AboutTab about={about} onSave={handleSaveAbout} />
-            )}
-            {pageState === "result" && result && activeTab === "Audience Analytics" && (
-              <AudienceAnalyticsTab result={result} />
-            )}
-            {pageState === "result" &&
-              result &&
-              !["Portfolio", "About", "Audience Analytics"].includes(activeTab) && (
-                <ComingSoonTab label={activeTab} />
-              )}
-          </div>
-
-          {/* Right panel */}
-          {showRightPanel && <RightPanel result={result} />}
+      {view === "creators" ? (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {error && (
+            <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <X size={14} className="text-red-500" />
+              <p className="text-sm text-red-700">{error}</p>
+              <button onClick={() => setError(null)} className="ml-auto"><X size={14} className="text-red-400" /></button>
+            </div>
+          )}
+          <CreatorsView
+            creators={creators}
+            loading={loadingCreators}
+            onSelect={handleSelectCreator}
+            onCreateNew={openNewCreatorModal}
+          />
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <ProfileHeader
+            profile={firstProfile}
+            profiles={result?.profiles ?? []}
+            overrides={profileOverrides}
+            onEditClick={() => setEditingProfile(true)}
+          />
+          <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+
+          {error && (
+            <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <X size={14} className="text-red-500" />
+              <p className="text-sm text-red-700">{error}</p>
+              <button onClick={() => setError(null)} className="ml-auto"><X size={14} className="text-red-400" /></button>
+            </div>
+          )}
+
+          <div className="flex flex-1 overflow-hidden">
+            {/* Main content */}
+            <div className="flex flex-1 overflow-hidden">
+              {pageState === "empty" && <EmptyState onCreateByURL={openNewCreatorModal} />}
+              {pageState === "loading" && <LoadingState completedSteps={completedSteps} steps={loadingSteps} />}
+              {pageState === "result" && result && activeTab === "Portfolio" && (
+                <PortfolioResult
+                  result={result}
+                  editMode={editMode}
+                  onToggleEdit={() => setEditMode((v) => !v)}
+                  onDeletePost={handleDeletePost}
+                  onReorder={handleReorder}
+                  onSaveSummary={handleSaveSummary}
+                  onRegenerateClick={() => {
+                    setModalTargetId(activePortfolioId);
+                    setPageState("modal");
+                  }}
+                />
+              )}
+              {pageState === "result" && result && activeTab === "About" && (
+                <AboutTab about={about} onSave={handleSaveAbout} />
+              )}
+              {pageState === "result" && result && activeTab === "Audience Analytics" && (
+                <AudienceAnalyticsTab result={result} />
+              )}
+              {pageState === "result" &&
+                result &&
+                !["Portfolio", "About", "Audience Analytics"].includes(activeTab) && (
+                  <ComingSoonTab label={activeTab} />
+                )}
+            </div>
+
+            {/* Right panel */}
+            {showRightPanel && <RightPanel result={result} />}
+          </div>
+        </div>
+      )}
 
       {pageState === "modal" && (
         <URLModal
           onClose={() => setPageState(result ? "result" : "empty")}
           onSubmit={handleGenerate}
           initialIgUrl={
-            result?.profiles.find((p) => p.platform === "instagram")?.username
-              ? `https://instagram.com/${result.profiles.find((p) => p.platform === "instagram")!.username}`
+            modalTargetId && result?.profiles.find((p) => p.platform === "instagram")?.username
+              ? `https://instagram.com/${result!.profiles.find((p) => p.platform === "instagram")!.username}`
               : ""
           }
           initialTtUrl={
-            result?.profiles.find((p) => p.platform === "tiktok")?.username
-              ? `https://www.tiktok.com/@${result.profiles.find((p) => p.platform === "tiktok")!.username}`
+            modalTargetId && result?.profiles.find((p) => p.platform === "tiktok")?.username
+              ? `https://www.tiktok.com/@${result!.profiles.find((p) => p.platform === "tiktok")!.username}`
               : ""
           }
         />

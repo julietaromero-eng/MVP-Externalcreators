@@ -74,9 +74,19 @@ export interface AIAnalysis {
 }
 
 export interface GenerateResponse {
+  id: string;
   profiles: CreatorProfile[];
   aiAnalysis: AIAnalysis;
   generatedAt: string;
   about?: PortfolioAbout;
   profileOverrides?: ProfileOverrides;
+}
+
+export interface PortfolioSummary {
+  id: string;
+  displayName: string;
+  username: string;
+  profilePicUrl: string | null;
+  platforms: Platform[];
+  generatedAt: string | null;
 }
