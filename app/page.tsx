@@ -22,6 +22,15 @@ function fmt(n: number): string {
   return n.toString();
 }
 
+// Strips accents and lowercases so search matches regardless of diacritics
+// (e.g. "ursula" finds "Úrsula") or exact word order.
+function normalizeSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+}
+
 type PageState = "empty" | "modal" | "loading" | "result";
 
 const BASE_LOADING_STEPS = [
@@ -1532,11 +1541,12 @@ function CreatorsView({
   const [tab, setTab] = useState<CreatorTabLabel>("Creators Portfolio AI");
   const [search, setSearch] = useState("");
 
-  const query = search.trim().toLowerCase();
-  const filteredCreators = query
-    ? creators.filter(
-        (c) => c.displayName.toLowerCase().includes(query) || c.username.toLowerCase().includes(query)
-      )
+  const queryTokens = normalizeSearch(search).trim().split(/\s+/).filter(Boolean);
+  const filteredCreators = queryTokens.length
+    ? creators.filter((c) => {
+        const haystack = normalizeSearch(`${c.displayName} ${c.username}`);
+        return queryTokens.every((token) => haystack.includes(token));
+      })
     : creators;
 
   return (
