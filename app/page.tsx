@@ -1610,8 +1610,11 @@ function CreatorsView({
                 <button
                   key={creator.id}
                   onClick={() => onSelect(creator.id)}
-                  className="flex flex-col items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-5 hover:shadow-md hover:border-bk-purple/30 transition-all text-center"
+                  className="relative flex flex-col items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-5 hover:shadow-md hover:border-bk-purple/30 transition-all text-center"
                 >
+                  <span className="absolute top-2.5 right-2.5 flex items-center gap-1 bg-bk-success-light text-bk-success text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                    <Check size={10} strokeWidth={3} /> Saved
+                  </span>
                   <div className="w-16 h-16 rounded-full overflow-hidden bg-bk-border-light flex-shrink-0 flex items-center justify-center">
                     {creator.profilePicUrl ? (
                       <Image
@@ -1803,6 +1806,7 @@ export default function Home() {
   const [profileOverrides, setProfileOverrides] = useState<ProfileOverrides | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("Portfolio");
   const [editMode, setEditMode] = useState(false);
   const stepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -2041,12 +2045,15 @@ export default function Home() {
       setError("Couldn't save this creator. Please try again.");
       throw new Error("save portfolio failed");
     }
+    const savedName = result?.profiles[0]?.displayName || "Profile";
     setResult(null);
     setAbout(null);
     setProfileOverrides(null);
     setActivePortfolioId(null);
     setPageState("empty");
     setCreatorsView("list");
+    setSuccessMessage(`${savedName} saved to Creators Portfolio AI.`);
+    setTimeout(() => setSuccessMessage(null), 4000);
   };
 
   useEffect(() => () => stopStepAnimation(), []);
@@ -2073,6 +2080,13 @@ export default function Home() {
 
       {creatorsView === "list" ? (
         <div className="flex flex-1 flex-col overflow-hidden">
+          {successMessage && (
+            <div className="mx-8 mt-4 flex items-center gap-2 bg-bk-success-light border border-bk-success/20 rounded-xl px-4 py-3">
+              <Check size={14} className="text-bk-success" />
+              <p className="text-sm text-green-800">{successMessage}</p>
+              <button onClick={() => setSuccessMessage(null)} className="ml-auto"><X size={14} className="text-green-700" /></button>
+            </div>
+          )}
           {error && (
             <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               <X size={14} className="text-red-500" />
