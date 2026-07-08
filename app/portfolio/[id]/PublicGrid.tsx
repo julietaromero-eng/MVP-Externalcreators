@@ -122,6 +122,7 @@ export function PublicGrid({ items }: { items: Item[] }) {
             <div className="relative aspect-square bg-black flex-shrink-0">
               {active.post.isVideo && active.post.videoUrl ? (
                 <video
+                  key={active.post.id ?? active.post.videoUrl}
                   src={active.post.videoUrl}
                   poster={active.post.thumbnailUrl ?? undefined}
                   controls

@@ -1074,6 +1074,7 @@ function PostLightbox({
         <div className="relative aspect-square bg-black flex-shrink-0">
           {post.isVideo && post.videoUrl ? (
             <video
+              key={post.id ?? post.videoUrl}
               src={post.videoUrl}
               poster={post.thumbnailUrl ?? undefined}
               controls
