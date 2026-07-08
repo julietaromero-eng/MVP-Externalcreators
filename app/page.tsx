@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import {
   LayoutDashboard, Bell, MessageSquare, Briefcase, Handshake,
-  Megaphone, Images, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
+  Megaphone, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
   Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search,
 } from "lucide-react";
@@ -43,24 +43,21 @@ function buildLoadingSteps(igUrl: string, ttUrl: string, ytUrl: string): string[
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
-type MainView = "portfolio" | "creators";
-
-const NAV_ITEMS: { icon: typeof LayoutDashboard; label: string; view?: MainView }[] = [
+const NAV_ITEMS: { icon: typeof LayoutDashboard; label: string; isCreators?: boolean }[] = [
   { icon: LayoutDashboard, label: "Dashboard" },
   { icon: Bell, label: "Notifications" },
   { icon: MessageSquare, label: "Messages" },
   { icon: Briefcase, label: "Deliverables" },
   { icon: Handshake, label: "Collabs" },
   { icon: Megaphone, label: "Opportunities" },
-  { icon: Users, label: "Creators", view: "creators" },
-  { icon: Images, label: "Portfolio", view: "portfolio" },
+  { icon: Users, label: "External Creators", isCreators: true },
   { icon: CircleDollarSign, label: "Invoicing" },
   { icon: SquarePlay, label: "Content Library" },
   { icon: Building2, label: "Brands" },
   { icon: FileEdit, label: "External Reviews" },
 ];
 
-function Sidebar({ view, onNavigate }: { view: MainView; onNavigate: (view: MainView) => void }) {
+function Sidebar({ onNavigateCreators }: { onNavigateCreators: () => void }) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -80,31 +77,26 @@ function Sidebar({ view, onNavigate }: { view: MainView; onNavigate: (view: Main
         </button>
       </div>
       <nav className="flex-1 space-y-0.5">
-        {NAV_ITEMS.map(({ icon: Icon, label, view: itemView }) => {
-          const active = itemView !== undefined && itemView === view;
-          return (
-            <button
-              key={label}
-              onClick={itemView ? () => onNavigate(itemView) : undefined}
-              className={`relative w-full flex items-center gap-3 pl-[22px] pr-3 h-9 text-sm font-medium transition-colors ${
-                active
-                  ? "text-bk-text-primary"
-                  : itemView
-                    ? "text-bk-text-secondary hover:text-bk-text-primary"
-                    : "text-bk-text-secondary cursor-default"
-              }`}
-            >
-              {active && (
-                <span
-                  className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
-                  style={{ background: "var(--gradient-brand)" }}
-                />
-              )}
-              <Icon size={15} className="flex-shrink-0" />
-              {expanded && <span className="whitespace-nowrap">{label}</span>}
-            </button>
-          );
-        })}
+        {NAV_ITEMS.map(({ icon: Icon, label, isCreators }) => (
+          <button
+            key={label}
+            onClick={isCreators ? onNavigateCreators : undefined}
+            className={`relative w-full flex items-center gap-3 pl-[22px] pr-3 h-9 text-sm font-medium transition-colors ${
+              isCreators
+                ? "text-bk-text-primary"
+                : "text-bk-text-secondary cursor-default"
+            }`}
+          >
+            {isCreators && (
+              <span
+                className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
+                style={{ background: "var(--gradient-brand)" }}
+              />
+            )}
+            <Icon size={15} className="flex-shrink-0" />
+            {expanded && <span className="whitespace-nowrap">{label}</span>}
+          </button>
+        ))}
       </nav>
     </aside>
   );
@@ -401,36 +393,6 @@ function RightPanel({ result }: { result: GenerateResponse | null }) {
         </p>
       </div>
     </aside>
-  );
-}
-
-// ─── Empty State ─────────────────────────────────────────────────────────────
-
-function EmptyState({ onCreateByURL }: { onCreateByURL: () => void }) {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center py-16 px-8">
-      <h2 className="text-2xl font-bold text-bk-text-primary mb-2 flex items-center gap-2">
-        Portfolio <span>🎨</span>
-      </h2>
-      <p className="text-bk-text-secondary text-sm text-center max-w-sm mb-8">
-        Your portfolio contains all of your work brands will see. Make sure you include a variety of video & photo examples that best highlight your skills as a creator.
-      </p>
-      <button className="flex items-center gap-2 bg-bk-purple text-white font-semibold px-6 py-3 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors mb-3">
-        ↑ Upload Content
-      </button>
-      <p className="text-xs text-bk-purple mb-3">or drag and drop files here</p>
-      <p className="text-xs text-bk-text-muted mb-3">or</p>
-      <button
-        onClick={onCreateByURL}
-        className="flex items-center gap-2 bg-bk-purple text-white font-semibold px-6 py-3 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
-      >
-        <span className="text-white">✦</span>
-        Create Portfolio by URL
-      </button>
-      <p className="text-xs text-bk-text-muted mt-3">
-        Paste your Instagram or TikTok URL and we&apos;ll build it automatically
-      </p>
-    </div>
   );
 }
 
@@ -1079,18 +1041,35 @@ function PostLightbox({
       </button>
 
       <div className="relative bg-bk-bg rounded-2xl overflow-hidden shadow-2xl w-[420px] max-h-[85vh] flex flex-col">
-        <div className="relative aspect-square bg-bk-border-light flex-shrink-0">
-          {post.thumbnailUrl ? (
-            <Image src={post.thumbnailUrl} alt={post.caption.slice(0, 60) || "Post"} fill className="object-cover" />
+        <div className="relative aspect-square bg-black flex-shrink-0">
+          {post.isVideo && post.videoUrl ? (
+            <video
+              src={post.videoUrl}
+              poster={post.thumbnailUrl ?? undefined}
+              controls
+              autoPlay
+              className="absolute inset-0 w-full h-full object-contain"
+            />
           ) : (
-            <div className="absolute inset-0 bg-bk-border-light" />
-          )}
-          {post.isVideo && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-14 h-14 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
-                <Play size={22} className="text-white fill-white ml-0.5" />
-              </div>
-            </div>
+            <>
+              {post.thumbnailUrl ? (
+                <Image src={post.thumbnailUrl} alt={post.caption.slice(0, 60) || "Post"} fill className="object-cover" />
+              ) : (
+                <div className="absolute inset-0 bg-bk-border-light" />
+              )}
+              {post.isVideo && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+                  <div className="w-14 h-14 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
+                    <Play size={22} className="text-white fill-white ml-0.5" />
+                  </div>
+                  {post.postUrl && (
+                    <span className="text-white text-xs bg-black/45 backdrop-blur-sm px-2 py-1 rounded-full pointer-events-auto">
+                      Preview unavailable — see original
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
         <div className="p-4 space-y-2 overflow-y-auto">
@@ -1810,7 +1789,7 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [view, setView] = useState<MainView>("portfolio");
+  const [creatorsView, setCreatorsView] = useState<"list" | "detail">("list");
   const [pageState, setPageState] = useState<PageState>("empty");
   const [initializing, setInitializing] = useState(true);
   const [completedSteps, setCompletedSteps] = useState(0);
@@ -1838,6 +1817,7 @@ export default function Home() {
           setProfileOverrides(data.profileOverrides ?? null);
           setActivePortfolioId(data.id);
           setPageState("result");
+          setCreatorsView("detail");
         }
       })
       .catch(() => {})
@@ -1853,14 +1833,15 @@ export default function Home() {
       .finally(() => setLoadingCreators(false));
   };
 
-  const handleNavigate = (nextView: MainView) => {
-    setView(nextView);
-    if (nextView === "creators") loadCreators();
-  };
+  useEffect(() => {
+    if (creatorsView === "list") loadCreators();
+  }, [creatorsView]);
+
+  const handleBackToList = () => setCreatorsView("list");
 
   const handleSelectCreator = async (id: string) => {
     setInitializing(true);
-    setView("portfolio");
+    setCreatorsView("detail");
     try {
       const res = await fetch(`/api/portfolio?id=${id}`);
       const data = await res.json();
@@ -1901,6 +1882,7 @@ export default function Home() {
     const steps = buildLoadingSteps(igUrl, ttUrl, ytUrl);
     setLoadingSteps(steps);
     setPageState("loading");
+    setCreatorsView("detail");
     setError(null);
     setEditMode(false);
     startStepAnimation(steps.length);
@@ -1927,17 +1909,18 @@ export default function Home() {
           setProfileOverrides(data.profileOverrides ?? null);
           setActivePortfolioId(data.id);
           setActiveTab("Portfolio");
-          setView("portfolio");
           setPageState("result");
         }, 800);
       } else {
         setError(data.error ?? "Error generating portfolio");
         setPageState("empty");
+        setCreatorsView("list");
       }
     } catch {
       stopStepAnimation();
       setError("Connection error. Please try again.");
       setPageState("empty");
+      setCreatorsView("list");
     }
   };
 
@@ -2063,6 +2046,7 @@ export default function Home() {
     setProfileOverrides(null);
     setActivePortfolioId(null);
     setPageState("empty");
+    setCreatorsView("list");
   };
 
   useEffect(() => () => stopStepAnimation(), []);
@@ -2076,7 +2060,7 @@ export default function Home() {
   }
 
   const firstProfile = result?.profiles[0];
-  const showRightPanel = pageState !== "loading" && view === "portfolio";
+  const showRightPanel = pageState !== "loading" && creatorsView === "detail";
 
   const openNewCreatorModal = () => {
     setModalTargetId(null);
@@ -2085,9 +2069,9 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-bk-bg-light overflow-hidden">
-      <Sidebar view={view} onNavigate={handleNavigate} />
+      <Sidebar onNavigateCreators={handleBackToList} />
 
-      {view === "creators" ? (
+      {creatorsView === "list" ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           {error && (
             <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -2105,6 +2089,12 @@ export default function Home() {
         </div>
       ) : (
         <div className="flex flex-1 flex-col overflow-hidden">
+          <button
+            onClick={handleBackToList}
+            className="flex items-center gap-1.5 text-sm text-bk-text-secondary hover:text-bk-text-primary px-8 pt-4 transition-colors w-fit"
+          >
+            ← Back to Creators
+          </button>
           <ProfileHeader
             profile={firstProfile}
             profiles={result?.profiles ?? []}
@@ -2124,7 +2114,6 @@ export default function Home() {
           <div className="flex flex-1 overflow-hidden">
             {/* Main content */}
             <div className="flex flex-1 overflow-hidden">
-              {pageState === "empty" && <EmptyState onCreateByURL={openNewCreatorModal} />}
               {pageState === "loading" && <LoadingState completedSteps={completedSteps} steps={loadingSteps} />}
               {pageState === "result" && result && activeTab === "Portfolio" && (
                 <PortfolioResult

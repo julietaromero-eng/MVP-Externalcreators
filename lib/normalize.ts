@@ -27,13 +27,16 @@ export function normalizeInstagram(raw: RawData): CreatorProfile {
       ? ((p.carousel_media as RawData[])?.[0]?.image_versions2 as RawData)?.candidates as RawData[]
       : ((p.image_versions2 as RawData)?.candidates as RawData[]);
     const thumbnailUrl = (candidates?.[0]?.url as string) ?? null;
+    const videoUrl = isVideo ? ((p.video_versions as RawData[])?.[0]?.url as string) ?? null : null;
+    const code = p.code as string | undefined;
     const captionObj = p.caption as Record<string, unknown> | null;
     return {
       thumbnailUrl,
-      postUrl: null,
+      postUrl: code ? `https://www.instagram.com/${isVideo ? "reel" : "p"}/${code}/` : null,
       likesCount: (p.like_count as number) ?? 0,
       commentsCount: (p.comment_count as number) ?? 0,
       isVideo,
+      videoUrl,
       caption: (captionObj?.text as string) ?? "",
     };
   });

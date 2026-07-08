@@ -92,6 +92,7 @@ function postRowToCreatorPost(row: Record<string, unknown>): CreatorPost {
     commentsCount: (row.comments_count as number) ?? 0,
     viewsCount: (row.views_count as number) ?? undefined,
     isVideo: (row.is_video as boolean) ?? false,
+    videoUrl: (row.video_url as string) ?? null,
     caption: (row.caption as string) ?? "",
     sortOrder: (row.sort_order as number) ?? 0,
   };
@@ -195,6 +196,7 @@ export async function saveGeneratedPortfolio(
           comments_count: post.commentsCount,
           views_count: post.viewsCount ?? null,
           is_video: post.isVideo ?? false,
+          video_url: post.videoUrl ?? null,
           sort_order: index,
         }))
       );

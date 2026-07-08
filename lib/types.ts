@@ -10,6 +10,7 @@ export interface CreatorPost {
   commentsCount: number;
   viewsCount?: number;
   isVideo?: boolean;
+  videoUrl?: string | null;
   caption: string;
   sortOrder?: number;
 }
