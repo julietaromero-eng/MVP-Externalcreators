@@ -853,7 +853,7 @@ function PortfolioResult({
               <div className="w-6 h-6 bg-bk-purple-light rounded-md flex items-center justify-center">
                 <span className="text-bk-purple text-xs font-bold">✦</span>
               </div>
-              <span className="font-semibold text-bk-text-primary text-sm">AI Creator Summary</span>
+              <span className="font-semibold text-bk-text-primary text-sm">Summary</span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs text-bk-text-muted italic">Generated from public information</span>
