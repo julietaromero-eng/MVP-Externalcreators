@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Bell, MessageSquare, Briefcase, Handshake,
   Megaphone, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
-  Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search,
+  Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search, Copy,
 } from "lucide-react";
 import {
   FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
@@ -156,16 +156,28 @@ function ProfileHeader({
   profile,
   profiles,
   overrides,
+  portfolioId,
   onEditClick,
 }: {
   profile?: CreatorProfile;
   profiles: CreatorProfile[];
   overrides?: ProfileOverrides | null;
+  portfolioId: string | null;
   onEditClick: () => void;
 }) {
   const name = overrides?.displayName || profile?.displayName || "John Romero";
   const profilePicUrl = overrides?.profilePicUrl || profile?.profilePicUrl;
   const initial = name.charAt(0).toUpperCase();
+  const [copied, setCopied] = useState(false);
+  const publicPath = portfolioId ? `/portfolio/${portfolioId}` : null;
+  const publicUrl = publicPath && typeof window !== "undefined" ? `${window.location.origin}${publicPath}` : "";
+
+  const handleCopy = () => {
+    if (!publicUrl) return;
+    navigator.clipboard.writeText(publicUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="bg-bk-bg border-b border-bk-border px-8 py-4">
@@ -199,13 +211,28 @@ function ProfileHeader({
             )}
           </div>
         </div>
-        <div className="flex items-start gap-1.5 bg-bk-bg-light border border-bk-border rounded-xl px-4 py-3 min-w-[260px]">
-          <div className="flex-1">
-            <p className="text-xs font-semibold text-bk-text-primary">Public portfolio URL</p>
-            <span className="text-xs text-bk-purple">portfolio.brkaway.co/johndoe</span>
+        {publicPath && (
+          <div className="flex items-start gap-2 bg-bk-bg-light border border-bk-border rounded-xl px-4 py-3 min-w-[260px]">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-bk-text-primary">Public portfolio URL</p>
+              <a
+                href={publicPath}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-bk-purple hover:underline truncate block"
+              >
+                {publicUrl.replace(/^https?:\/\//, "")}
+              </a>
+            </div>
+            <button
+              onClick={handleCopy}
+              title="Copy link"
+              className="text-bk-text-muted hover:text-bk-text-primary transition-colors flex-shrink-0 mt-0.5"
+            >
+              {copied ? <Check size={13} className="text-bk-success" /> : <Copy size={13} />}
+            </button>
           </div>
-          <Pencil size={12} className="text-bk-text-muted mt-0.5" />
-        </div>
+        )}
       </div>
     </div>
   );
@@ -2119,6 +2146,7 @@ export default function Home() {
             profile={firstProfile}
             profiles={result?.profiles ?? []}
             overrides={profileOverrides}
+            portfolioId={activePortfolioId}
             onEditClick={() => setEditingProfile(true)}
           />
           <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
