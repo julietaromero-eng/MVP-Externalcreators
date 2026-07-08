@@ -22,6 +22,16 @@ function fmt(n: number): string {
   return n.toString();
 }
 
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 // Strips accents and lowercases so search matches regardless of diacritics
 // (e.g. "ursula" finds "Úrsula") or exact word order.
 function normalizeSearch(value: string): string {
@@ -1620,11 +1630,8 @@ function CreatorsView({
                 <button
                   key={creator.id}
                   onClick={() => onSelect(creator.id)}
-                  className="relative flex flex-col items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-5 hover:shadow-md hover:border-bk-purple/30 transition-all text-center"
+                  className="flex flex-col items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-5 hover:shadow-md hover:border-bk-purple/30 transition-all text-center"
                 >
-                  <span className="absolute top-2.5 right-2.5 flex items-center gap-1 bg-bk-success-light text-bk-success text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                    <Check size={10} strokeWidth={3} /> Saved
-                  </span>
                   <div className="w-16 h-16 rounded-full overflow-hidden bg-bk-border-light flex-shrink-0 flex items-center justify-center">
                     {creator.profilePicUrl ? (
                       <Image
@@ -1655,6 +1662,11 @@ function CreatorsView({
                         <FaTiktok size={12} className="text-bk-text-primary" />
                       )}
                     </div>
+                  )}
+                  {creator.generatedAt && (
+                    <p className="text-[11px] text-bk-text-muted">
+                      Generated {formatDateTime(creator.generatedAt)}
+                    </p>
                   )}
                 </button>
               ))}
