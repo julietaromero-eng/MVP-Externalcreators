@@ -22,6 +22,7 @@ export function normalizeInstagram(raw: RawData): CreatorProfile {
 
   const recentPosts: CreatorPost[] = sorted.map((p) => {
     const isCarousel = (p.media_type as number) === 8;
+    const isVideo = (p.media_type as number) === 2;
     const candidates = isCarousel
       ? ((p.carousel_media as RawData[])?.[0]?.image_versions2 as RawData)?.candidates as RawData[]
       : ((p.image_versions2 as RawData)?.candidates as RawData[]);
@@ -32,6 +33,7 @@ export function normalizeInstagram(raw: RawData): CreatorProfile {
       postUrl: null,
       likesCount: (p.like_count as number) ?? 0,
       commentsCount: (p.comment_count as number) ?? 0,
+      isVideo,
       caption: (captionObj?.text as string) ?? "",
     };
   });
@@ -77,6 +79,7 @@ export function normalizeTikTok(raw: RawData): CreatorProfile {
       likesCount: stats.likeCount ?? (v.diggCount as number) ?? 0,
       commentsCount: stats.commentCount ?? 0,
       viewsCount: stats.playCount ?? 0,
+      isVideo: true,
       caption: (v.desc as string) ?? "",
     };
   });

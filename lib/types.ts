@@ -9,6 +9,7 @@ export interface CreatorPost {
   likesCount: number;
   commentsCount: number;
   viewsCount?: number;
+  isVideo?: boolean;
   caption: string;
   sortOrder?: number;
 }
@@ -75,6 +76,7 @@ export interface AIAnalysis {
 
 export interface GenerateResponse {
   id: string;
+  isSaved?: boolean;
   profiles: CreatorProfile[];
   aiAnalysis: AIAnalysis;
   generatedAt: string;

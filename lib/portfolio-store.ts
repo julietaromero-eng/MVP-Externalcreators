@@ -46,6 +46,7 @@ export async function listPortfolios(): Promise<PortfolioSummary[]> {
     .from("portfolios")
     .select("id, display_name, profile_pic_url, generated_at")
     .not("generated_at", "is", null)
+    .eq("is_saved", true)
     .order("generated_at", { ascending: false });
   if (portfoliosError) throw portfoliosError;
   if (!portfolioRows || portfolioRows.length === 0) return [];
@@ -90,6 +91,7 @@ function postRowToCreatorPost(row: Record<string, unknown>): CreatorPost {
     likesCount: (row.likes_count as number) ?? 0,
     commentsCount: (row.comments_count as number) ?? 0,
     viewsCount: (row.views_count as number) ?? undefined,
+    isVideo: (row.is_video as boolean) ?? false,
     caption: (row.caption as string) ?? "",
     sortOrder: (row.sort_order as number) ?? 0,
   };
@@ -192,6 +194,7 @@ export async function saveGeneratedPortfolio(
           likes_count: post.likesCount,
           comments_count: post.commentsCount,
           views_count: post.viewsCount ?? null,
+          is_video: post.isVideo ?? false,
           sort_order: index,
         }))
       );
@@ -219,6 +222,7 @@ export async function saveGeneratedPortfolio(
 
 export interface LoadedPortfolio {
   id: string;
+  isSaved: boolean;
   profiles: CreatorProfile[];
   aiAnalysis: AIAnalysis;
   generatedAt: string;
@@ -229,12 +233,15 @@ export interface LoadedPortfolio {
 export async function loadPortfolio(portfolioId?: string): Promise<LoadedPortfolio | null> {
   const supabase = getSupabaseAdmin();
 
+  // With no explicit id, only the current unsaved draft is eligible — once a
+  // portfolio is saved it belongs to the Creators list, not the working tab.
   const { data: portfolio } = portfolioId
     ? await supabase.from("portfolios").select("*").eq("id", portfolioId).maybeSingle()
     : await supabase
         .from("portfolios")
         .select("*")
         .not("generated_at", "is", null)
+        .eq("is_saved", false)
         .order("generated_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -280,6 +287,7 @@ export async function loadPortfolio(portfolioId?: string): Promise<LoadedPortfol
 
   return {
     id: portfolio.id as string,
+    isSaved: (portfolio.is_saved as boolean) ?? false,
     profiles,
     aiAnalysis,
     generatedAt: portfolio.generated_at as string,
@@ -364,6 +372,12 @@ export async function saveProfileOverrides(
 
   if (error) throw error;
   return overrides;
+}
+
+export async function savePortfolio(portfolioId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.from("portfolios").update({ is_saved: true }).eq("id", portfolioId);
+  if (error) throw error;
 }
 
 export async function saveAiSummary(portfolioId: string, summary: string): Promise<string> {

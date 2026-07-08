@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Bell, MessageSquare, Briefcase, Handshake,
   Megaphone, Images, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
-  Heart, MessageCircle, Eye, GripVertical, Globe, Video,
+  Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search,
 } from "lucide-react";
 import {
   FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
@@ -631,6 +631,13 @@ function ContentCard({
         ) : (
           <div className="absolute inset-0 bg-bk-border-light" />
         )}
+        {post.isVideo && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-11 h-11 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
+              <Play size={18} className="text-white fill-white ml-0.5" />
+            </div>
+          </div>
+        )}
         {editMode && (
           <>
             <div className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white cursor-grab">
@@ -657,7 +664,7 @@ function ContentCard({
             isIG ? "bg-gradient-to-r from-purple-500 to-pink-500" : "bg-black"
           }`}
         >
-          {isIG ? "Instagram" : "TikTok"}
+          {isIG ? (post.isVideo ? "Reel" : "Instagram") : "TikTok"}
         </span>
         <p className="text-sm font-semibold text-bk-text-primary line-clamp-2 leading-snug">
           {post.caption || "—"}
@@ -728,6 +735,7 @@ function PortfolioResult({
   onReorder,
   onSaveSummary,
   onRegenerateClick,
+  onSaveClick,
 }: {
   result: GenerateResponse;
   editMode: boolean;
@@ -736,6 +744,7 @@ function PortfolioResult({
   onReorder: (newOrder: { post: CreatorPost; platform: Platform }[]) => void;
   onSaveSummary: (summary: string) => Promise<void>;
   onRegenerateClick: () => void;
+  onSaveClick: () => Promise<void>;
 }) {
   const [filter, setFilter] = useState<"all" | "instagram" | "tiktok">("all");
   const [dismissed, setDismissed] = useState(false);
@@ -744,6 +753,7 @@ function PortfolioResult({
   const [editingSummary, setEditingSummary] = useState(false);
   const [summaryDraft, setSummaryDraft] = useState(result.aiAnalysis.summary);
   const [savingSummary, setSavingSummary] = useState(false);
+  const [savingPortfolio, setSavingPortfolio] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const allPosts = result.profiles.flatMap((p) =>
@@ -785,6 +795,15 @@ function PortfolioResult({
     }
   };
 
+  const handleSaveClick = async () => {
+    setSavingPortfolio(true);
+    try {
+      await onSaveClick();
+    } finally {
+      setSavingPortfolio(false);
+    }
+  };
+
   const closeLightbox = () => setLightboxIndex(null);
   const showNextLightbox = () =>
     setLightboxIndex((i) => (i === null ? null : (i + 1) % filtered.length));
@@ -809,7 +828,16 @@ function PortfolioResult({
       )}
 
       <div className="p-8 space-y-6">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
+          {!result.isSaved && (
+            <button
+              onClick={handleSaveClick}
+              disabled={savingPortfolio}
+              className="flex items-center gap-1.5 bg-bk-success text-white font-semibold px-4 py-2 rounded-xl text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              <Check size={15} /> {savingPortfolio ? "Saving..." : "Save"}
+            </button>
+          )}
           <button
             onClick={onRegenerateClick}
             className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
@@ -1057,6 +1085,13 @@ function PostLightbox({
           ) : (
             <div className="absolute inset-0 bg-bk-border-light" />
           )}
+          {post.isVideo && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="w-14 h-14 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
+                <Play size={22} className="text-white fill-white ml-0.5" />
+              </div>
+            </div>
+          )}
         </div>
         <div className="p-4 space-y-2 overflow-y-auto">
           <span
@@ -1064,7 +1099,7 @@ function PostLightbox({
               isIG ? "bg-gradient-to-r from-purple-500 to-pink-500" : "bg-black"
             }`}
           >
-            {isIG ? "Instagram" : "TikTok"}
+            {isIG ? (post.isVideo ? "Reel" : "Instagram") : "TikTok"}
           </span>
           <p className="text-sm text-bk-text-primary leading-relaxed">{post.caption || "—"}</p>
           <div className="flex items-center gap-3 text-bk-text-muted text-xs pt-1">
@@ -1495,6 +1530,15 @@ function AboutTab({
 
 // ─── Creators View ───────────────────────────────────────────────────────────
 
+const CREATOR_TABS = [
+  { label: "Roster", icon: Users },
+  { label: "Community Applicants", icon: FileText },
+  { label: "Archived", icon: Archive },
+  { label: "Creators Portfolio AI", icon: Sparkles },
+] as const;
+
+type CreatorTabLabel = (typeof CREATOR_TABS)[number]["label"];
+
 function CreatorsView({
   creators,
   loading,
@@ -1506,74 +1550,124 @@ function CreatorsView({
   onSelect: (id: string) => void;
   onCreateNew: () => void;
 }) {
+  const [tab, setTab] = useState<CreatorTabLabel>("Creators Portfolio AI");
+  const [search, setSearch] = useState("");
+
+  const query = search.trim().toLowerCase();
+  const filteredCreators = query
+    ? creators.filter(
+        (c) => c.displayName.toLowerCase().includes(query) || c.username.toLowerCase().includes(query)
+      )
+    : creators;
+
   return (
-    <div className="flex-1 overflow-y-auto p-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-bk-text-primary mb-1">Creators</h2>
-          <p className="text-sm text-bk-text-secondary">All portfolios generated so far. Click one to open it.</p>
-        </div>
-        <button
-          onClick={onCreateNew}
-          className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
-        >
-          <span>✦</span> New Creator
-        </button>
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex items-center gap-6 px-8 border-b border-bk-border flex-shrink-0">
+        {CREATOR_TABS.map(({ label, icon: Icon }) => (
+          <button
+            key={label}
+            onClick={() => setTab(label)}
+            className={`flex items-center gap-2 py-4 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === label
+                ? "border-bk-purple text-bk-text-primary"
+                : "border-transparent text-bk-text-secondary hover:text-bk-text-primary"
+            }`}
+          >
+            <Icon size={15} />
+            {label}
+          </button>
+        ))}
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 size={24} className="text-bk-purple animate-spin" />
-        </div>
-      ) : creators.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="w-14 h-14 bg-bk-purple-light rounded-full flex items-center justify-center mb-4">
-            <Users size={24} className="text-bk-purple" />
-          </div>
-          <h3 className="text-lg font-bold text-bk-text-primary mb-2">No creators yet</h3>
-          <p className="text-sm text-bk-text-secondary max-w-sm">Generate your first portfolio to see it here.</p>
-        </div>
+      {tab !== "Creators Portfolio AI" ? (
+        <ComingSoonTab label={tab} />
       ) : (
-        <div className="grid grid-cols-4 gap-4">
-          {creators.map((creator) => (
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-bk-text-primary mb-1">Creators Portfolio AI</h2>
+              <p className="text-sm text-bk-text-secondary">All portfolios generated so far. Click one to open it.</p>
+            </div>
             <button
-              key={creator.id}
-              onClick={() => onSelect(creator.id)}
-              className="flex flex-col items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-5 hover:shadow-md hover:border-bk-purple/30 transition-all text-center"
+              onClick={onCreateNew}
+              className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
             >
-              <div className="w-16 h-16 rounded-full overflow-hidden bg-bk-border-light flex-shrink-0 flex items-center justify-center">
-                {creator.profilePicUrl ? (
-                  <Image
-                    src={creator.profilePicUrl}
-                    alt={creator.displayName}
-                    width={64}
-                    height={64}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-bk-text-muted text-xl font-semibold">
-                    {creator.displayName.charAt(0).toUpperCase()}
-                  </span>
-                )}
-              </div>
-              <div className="min-w-0 w-full">
-                <p className="font-semibold text-bk-text-primary text-sm line-clamp-1">{creator.displayName}</p>
-                {creator.username && (
-                  <p className="text-xs text-bk-text-muted line-clamp-1">@{creator.username}</p>
-                )}
-              </div>
-              {creator.platforms.length > 0 && (
-                <div className="flex items-center gap-1.5">
-                  {creator.platforms.includes("instagram") && (
-                    <FaInstagram size={12} className="text-[#E1306C]" />
-                  )}
-                  {creator.platforms.includes("tiktok") && (
-                    <FaTiktok size={12} className="text-bk-text-primary" />
-                  )}
-                </div>
-              )}
+              <span>✦</span> New Creator
             </button>
-          ))}
+          </div>
+
+          {creators.length > 0 && (
+            <div className="relative mb-6 max-w-sm">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-bk-text-muted" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name or username..."
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+              />
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 size={24} className="text-bk-purple animate-spin" />
+            </div>
+          ) : creators.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 bg-bk-purple-light rounded-full flex items-center justify-center mb-4">
+                <Users size={24} className="text-bk-purple" />
+              </div>
+              <h3 className="text-lg font-bold text-bk-text-primary mb-2">No creators yet</h3>
+              <p className="text-sm text-bk-text-secondary max-w-sm">Generate your first portfolio to see it here.</p>
+            </div>
+          ) : filteredCreators.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-sm text-bk-text-secondary">No creators match &ldquo;{search}&rdquo;.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 gap-4">
+              {filteredCreators.map((creator) => (
+                <button
+                  key={creator.id}
+                  onClick={() => onSelect(creator.id)}
+                  className="flex flex-col items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-5 hover:shadow-md hover:border-bk-purple/30 transition-all text-center"
+                >
+                  <div className="w-16 h-16 rounded-full overflow-hidden bg-bk-border-light flex-shrink-0 flex items-center justify-center">
+                    {creator.profilePicUrl ? (
+                      <Image
+                        src={creator.profilePicUrl}
+                        alt={creator.displayName}
+                        width={64}
+                        height={64}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-bk-text-muted text-xl font-semibold">
+                        {creator.displayName.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 w-full">
+                    <p className="font-semibold text-bk-text-primary text-sm line-clamp-1">{creator.displayName}</p>
+                    {creator.username && (
+                      <p className="text-xs text-bk-text-muted line-clamp-1">@{creator.username}</p>
+                    )}
+                  </div>
+                  {creator.platforms.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      {creator.platforms.includes("instagram") && (
+                        <FaInstagram size={12} className="text-[#E1306C]" />
+                      )}
+                      {creator.platforms.includes("tiktok") && (
+                        <FaTiktok size={12} className="text-bk-text-primary" />
+                      )}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1953,6 +2047,24 @@ export default function Home() {
     }
   };
 
+  const handleSaveCreator = async () => {
+    if (!activePortfolioId) return;
+    const res = await fetch("/api/portfolio/save", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portfolioId: activePortfolioId }),
+    });
+    if (!res.ok) {
+      setError("Couldn't save this creator. Please try again.");
+      throw new Error("save portfolio failed");
+    }
+    setResult(null);
+    setAbout(null);
+    setProfileOverrides(null);
+    setActivePortfolioId(null);
+    setPageState("empty");
+  };
+
   useEffect(() => () => stopStepAnimation(), []);
 
   if (initializing) {
@@ -2022,6 +2134,7 @@ export default function Home() {
                   onDeletePost={handleDeletePost}
                   onReorder={handleReorder}
                   onSaveSummary={handleSaveSummary}
+                  onSaveClick={handleSaveCreator}
                   onRegenerateClick={() => {
                     setModalTargetId(activePortfolioId);
                     setPageState("modal");
