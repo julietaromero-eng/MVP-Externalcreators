@@ -728,7 +728,6 @@ function PortfolioResult({
   onSaveClick: () => Promise<void>;
 }) {
   const [filter, setFilter] = useState<"all" | "instagram" | "tiktok">("all");
-  const [dismissed, setDismissed] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("default");
   const [editingSummary, setEditingSummary] = useState(false);
@@ -793,21 +792,6 @@ function PortfolioResult({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {/* Success Banner */}
-      {!dismissed && (
-        <div className="flex items-center justify-between gap-3 bg-bk-success-light border-b border-bk-success/20 px-8 py-3">
-          <div className="flex items-center gap-2">
-            <Check size={16} className="text-bk-success" />
-            <span className="text-sm text-green-800 font-medium">
-              Portfolio successfully generated using public social information.
-            </span>
-          </div>
-          <button onClick={() => setDismissed(true)}>
-            <X size={16} className="text-green-700" />
-          </button>
-        </div>
-      )}
-
       <div className="p-8 space-y-6">
         <div className="flex justify-end gap-3">
           {!result.isSaved && (
@@ -1838,7 +1822,7 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => {
         if (data?.profiles) {
-          setResult({ id: data.id, profiles: data.profiles, aiAnalysis: data.aiAnalysis, generatedAt: data.generatedAt });
+          setResult({ id: data.id, isSaved: data.isSaved, profiles: data.profiles, aiAnalysis: data.aiAnalysis, generatedAt: data.generatedAt });
           setAbout(data.about ?? null);
           setProfileOverrides(data.profileOverrides ?? null);
           setActivePortfolioId(data.id);
@@ -1872,7 +1856,7 @@ export default function Home() {
       const res = await fetch(`/api/portfolio?id=${id}`);
       const data = await res.json();
       if (data?.profiles) {
-        setResult({ id: data.id, profiles: data.profiles, aiAnalysis: data.aiAnalysis, generatedAt: data.generatedAt });
+        setResult({ id: data.id, isSaved: data.isSaved, profiles: data.profiles, aiAnalysis: data.aiAnalysis, generatedAt: data.generatedAt });
         setAbout(data.about ?? null);
         setProfileOverrides(data.profileOverrides ?? null);
         setActivePortfolioId(data.id);

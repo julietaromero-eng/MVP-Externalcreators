@@ -137,7 +137,12 @@ export async function saveGeneratedPortfolio(
     .eq("id", portfolioId)
     .single();
 
-  const portfolioUpdates: Record<string, unknown> = { generated_at: new Date().toISOString() };
+  // Regenerating changes the content, so it always needs a fresh Save
+  // confirmation — even if this portfolio was previously saved.
+  const portfolioUpdates: Record<string, unknown> = {
+    generated_at: new Date().toISOString(),
+    is_saved: false,
+  };
   if (!current?.about_bio) portfolioUpdates.about_bio = aiAnalysis.summary;
   if (!current?.about_hobbies) portfolioUpdates.about_hobbies = aiAnalysis.hobbiesAndPassions;
   if (!current?.about_industries?.length) portfolioUpdates.about_industries = aiAnalysis.contentPillars;
