@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import {
-  LayoutDashboard, Bell, MessageSquare, Briefcase, Handshake,
-  Megaphone, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
+  Home as HomeIcon, Bell, Briefcase, Handshake,
+  Megaphone, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users, UserSearch,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
   Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search, Copy,
-  FolderOpen, UploadCloud, Trash2,
+  UploadCloud, Trash2, ClipboardCheck, Palette,
 } from "lucide-react";
 import {
   FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
@@ -66,19 +66,20 @@ function buildLoadingSteps(igUrl: string, ttUrl: string, ytUrl: string): string[
 
 type MainView = "creators" | "portfolio";
 
-const NAV_ITEMS: { icon: typeof LayoutDashboard; label: string; target?: MainView }[] = [
-  { icon: LayoutDashboard, label: "Dashboard" },
+const NAV_ITEMS: { icon: typeof HomeIcon; label: string; target?: MainView }[] = [
+  { icon: HomeIcon, label: "Dashboard" },
   { icon: Bell, label: "Notifications" },
-  { icon: MessageSquare, label: "Messages" },
+  { icon: MessageCircle, label: "Messages" },
   { icon: Briefcase, label: "Deliverables" },
   { icon: Handshake, label: "Collabs" },
   { icon: Megaphone, label: "Opportunities" },
-  { icon: Users, label: "External Creators", target: "creators" },
-  { icon: FolderOpen, label: "Portfolio", target: "portfolio" },
+  { icon: ClipboardCheck, label: "Tasks" },
+  { icon: UserSearch, label: "External Creators", target: "creators" },
+  { icon: Users, label: "Brands" },
+  { icon: Palette, label: "Portfolio", target: "portfolio" },
   { icon: CircleDollarSign, label: "Invoicing" },
   { icon: SquarePlay, label: "Content Library" },
-  { icon: Building2, label: "Brands" },
-  { icon: FileEdit, label: "External Reviews" },
+  { icon: Building2, label: "External Reviews" },
 ];
 
 function Sidebar({
