@@ -253,12 +253,14 @@ function ProfileHeader({
 // ─── Edit Profile Modal ──────────────────────────────────────────────────────
 
 function EditProfileModal({
+  portfolioId,
   overrides,
   fallbackName,
   fallbackPicUrl,
   onClose,
   onSave,
 }: {
+  portfolioId: string | null;
   overrides: ProfileOverrides | null;
   fallbackName: string;
   fallbackPicUrl: string | null;
@@ -268,6 +270,9 @@ function EditProfileModal({
   const [displayName, setDisplayName] = useState(overrides?.displayName || fallbackName);
   const [profilePicUrl, setProfilePicUrl] = useState(overrides?.profilePicUrl || fallbackPicUrl || "");
   const [saving, setSaving] = useState(false);
+  const [uploadingPic, setUploadingPic] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
     setSaving(true);
@@ -276,6 +281,33 @@ function EditProfileModal({
       onClose();
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePickFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file || !portfolioId) return;
+    setUploadingPic(true);
+    setUploadError(null);
+    try {
+      const signRes = await fetch("/api/portfolio/profile-picture/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portfolioId, filename: file.name }),
+      });
+      if (!signRes.ok) throw new Error("sign failed");
+      const { path, token, publicUrl } = await signRes.json();
+
+      const { error: uploadErr } = await getSupabaseBrowser()
+        .storage.from("portfolio-uploads")
+        .uploadToSignedUrl(path, token, file);
+      if (uploadErr) throw uploadErr;
+
+      setProfilePicUrl(publicUrl);
+    } catch {
+      setUploadError("Couldn't upload the photo. Please try again.");
+    } finally {
+      setUploadingPic(false);
     }
   };
 
@@ -301,14 +333,31 @@ function EditProfileModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Profile Picture URL</label>
-            <input
-              value={profilePicUrl}
-              onChange={(e) => setProfilePicUrl(e.target.value)}
-              placeholder="https://..."
-              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
-            />
-            <p className="text-xs text-bk-text-muted mt-1.5">Paste a link to an image. File uploads aren&apos;t supported yet.</p>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Profile Picture</label>
+            <div className="flex items-center gap-3">
+              {profilePicUrl ? (
+                <div className="w-12 h-12 rounded-full overflow-hidden border border-bk-border flex-shrink-0">
+                  <Image src={profilePicUrl} alt="" width={48} height={48} className="object-cover w-full h-full" />
+                </div>
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-bk-border-light flex-shrink-0" />
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handlePickFile(e.target.files)}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPic || !portfolioId}
+                className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-3 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors disabled:opacity-50"
+              >
+                <UploadCloud size={14} /> {uploadingPic ? "Uploading..." : "Upload Photo"}
+              </button>
+            </div>
+            {uploadError && <p className="text-xs text-red-600 mt-1.5">{uploadError}</p>}
           </div>
         </div>
 
@@ -2397,6 +2446,7 @@ function OwnPortfolioView() {
 
       {editingProfile && (
         <EditProfileModal
+          portfolioId={result?.id ?? null}
           overrides={profileOverrides}
           fallbackName={firstProfile?.displayName ?? ""}
           fallbackPicUrl={firstProfile?.profilePicUrl ?? null}
@@ -2810,6 +2860,7 @@ export default function Home() {
 
       {mainView === "creators" && editingProfile && (
         <EditProfileModal
+          portfolioId={activePortfolioId}
           overrides={profileOverrides}
           fallbackName={firstProfile?.displayName ?? ""}
           fallbackPicUrl={firstProfile?.profilePicUrl ?? null}
