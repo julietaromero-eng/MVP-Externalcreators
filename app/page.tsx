@@ -1843,11 +1843,13 @@ function PortfolioMediaCard({
   post,
   onOpen,
   onDelete,
+  onEdit,
   dragProps,
 }: {
   post: CreatorPost;
   onOpen: () => void;
   onDelete: () => void;
+  onEdit: () => void;
   dragProps: React.HTMLAttributes<HTMLDivElement>;
 }) {
   return (
@@ -1883,19 +1885,31 @@ function PortfolioMediaCard({
         )}
       </button>
 
-      <div className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
-        <GripVertical size={14} />
+      <div className="absolute top-2 left-2 w-8 h-8 rounded-full bg-white shadow flex items-center justify-center text-bk-text-secondary cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
+        <GripVertical size={16} />
       </div>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onDelete();
-        }}
-        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 hover:bg-red-500 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-      >
-        <Trash2 size={14} />
-      </button>
+      <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onEdit();
+          }}
+          className="w-8 h-8 rounded-full bg-bk-purple hover:bg-bk-purple-dark shadow flex items-center justify-center text-white transition-colors"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="w-8 h-8 rounded-full bg-red-600 hover:bg-red-700 shadow flex items-center justify-center text-white transition-colors"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -1977,7 +1991,9 @@ function OwnPortfolioView() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [resetting, setResetting] = useState(false);
+  const [replaceTargetPostId, setReplaceTargetPostId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
   const loadOwn = () => {
     setLoading(true);
@@ -2034,6 +2050,48 @@ function OwnPortfolioView() {
       loadOwn();
     } catch {
       setError("Couldn't upload the file. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleEditPost = (postId: string) => {
+    setReplaceTargetPostId(postId);
+    replaceFileInputRef.current?.click();
+  };
+
+  const handleReplaceFile = async (files: FileList | null) => {
+    const file = files?.[0];
+    const postId = replaceTargetPostId;
+    setReplaceTargetPostId(null);
+    if (!file || !postId) return;
+
+    setUploading(true);
+    setError(null);
+    try {
+      const isVideo = file.type.startsWith("video/");
+      const signRes = await fetch("/api/portfolio/own/upload/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, contentType: file.type }),
+      });
+      if (!signRes.ok) throw new Error("sign failed");
+      const { path, token, publicUrl } = await signRes.json();
+
+      const { error: uploadError } = await getSupabaseBrowser()
+        .storage.from("portfolio-uploads")
+        .uploadToSignedUrl(path, token, file);
+      if (uploadError) throw uploadError;
+
+      const replaceRes = await fetch("/api/portfolio/own/upload/replace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId, publicUrl, isVideo }),
+      });
+      if (!replaceRes.ok) throw new Error("replace failed");
+      loadOwn();
+    } catch {
+      setError("Couldn't replace the file. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -2224,6 +2282,13 @@ function OwnPortfolioView() {
                   className="hidden"
                   onChange={(e) => handleFiles(e.target.files)}
                 />
+                <input
+                  ref={replaceFileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  className="hidden"
+                  onChange={(e) => handleReplaceFile(e.target.files)}
+                />
 
                 {allPosts.length === 0 ? (
                   <div className="border-2 border-dashed border-bk-border rounded-2xl bg-bk-bg p-10 space-y-4">
@@ -2292,6 +2357,7 @@ function OwnPortfolioView() {
                           post={post}
                           onOpen={() => setLightboxIndex(i)}
                           onDelete={() => post.id && handleDeletePost(post.id)}
+                          onEdit={() => post.id && handleEditPost(post.id)}
                           dragProps={{
                             draggable: true,
                             onDragStart: () => setDragIndex(i),

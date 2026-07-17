@@ -535,3 +535,24 @@ export async function resetOwnPortfolio(): Promise<void> {
     })
     .eq("id", portfolio.id);
 }
+
+export async function replacePostMedia(
+  postId: string,
+  { publicUrl, isVideo }: { publicUrl: string; isVideo: boolean }
+): Promise<CreatorPost> {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase
+    .from("posts")
+    .update({
+      thumbnail_url: publicUrl,
+      video_url: isVideo ? publicUrl : null,
+      is_video: isVideo,
+    })
+    .eq("id", postId)
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return postRowToCreatorPost(data);
+}
