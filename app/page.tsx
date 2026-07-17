@@ -386,23 +386,34 @@ function EditProfileModal({
 
 const TABS = ["Portfolio", "About", "Pricing", "Testimonials", "Audience Analytics"];
 
-function TabBar({ activeTab, onTabChange }: { activeTab: string; onTabChange: (tab: string) => void }) {
+function TabBar({
+  activeTab,
+  onTabChange,
+  extra,
+}: {
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+  extra?: React.ReactNode;
+}) {
   return (
     <div className="bg-bk-bg border-b border-bk-border px-8">
-      <div className="flex items-center gap-6">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => onTabChange(tab)}
-            className={`py-3 text-sm border-b-2 transition-colors ${
-              tab === activeTab
-                ? "border-bk-purple text-bk-purple font-semibold"
-                : "border-transparent text-bk-text-secondary hover:text-bk-text-primary"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
+      <div className="flex items-center justify-between gap-6">
+        <div className="flex items-center gap-6">
+          {TABS.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => onTabChange(tab)}
+              className={`py-3 text-sm border-b-2 transition-colors ${
+                tab === activeTab
+                  ? "border-bk-purple text-bk-purple font-semibold"
+                  : "border-transparent text-bk-text-secondary hover:text-bk-text-primary"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+        {extra}
       </div>
     </div>
   );
@@ -2028,6 +2039,70 @@ function PortfolioMediaLightbox({
   );
 }
 
+// Renders one media-type section (Videos or Photos) with its own empty
+// state, matching the real product's layout of separate labeled sections
+// instead of one mixed grid.
+function PortfolioTypeSection({
+  title,
+  emoji,
+  emptyText,
+  entries,
+  hasAnyOfType,
+  onOpen,
+  onDelete,
+  onEdit,
+  onDragStart,
+  onDrop,
+  onDragEnd,
+}: {
+  title: string;
+  emoji: string;
+  emptyText: string;
+  entries: { post: CreatorPost; globalIndex: number }[];
+  hasAnyOfType: boolean;
+  onOpen: (globalIndex: number) => void;
+  onDelete: (postId: string) => void;
+  onEdit: (postId: string) => void;
+  onDragStart: (globalIndex: number) => void;
+  onDrop: (globalIndex: number) => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-bk-text-primary">{title}</h3>
+      {!hasAnyOfType ? (
+        <div className="border-2 border-dashed border-bk-border rounded-2xl bg-bk-bg p-10 text-center space-y-1">
+          <h2 className="text-lg font-bold text-bk-text-primary">
+            {title} {emoji}
+          </h2>
+          <p className="text-sm text-bk-text-secondary max-w-md mx-auto">{emptyText}</p>
+        </div>
+      ) : entries.length === 0 ? (
+        <p className="text-sm text-bk-text-muted py-6 text-center">No results match your search.</p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {entries.map(({ post, globalIndex }) => (
+            <PortfolioMediaCard
+              key={post.id ?? globalIndex}
+              post={post}
+              onOpen={() => onOpen(globalIndex)}
+              onDelete={() => post.id && onDelete(post.id)}
+              onEdit={() => post.id && onEdit(post.id)}
+              dragProps={{
+                draggable: true,
+                onDragStart: () => onDragStart(globalIndex),
+                onDragOver: (e) => e.preventDefault(),
+                onDrop: () => onDrop(globalIndex),
+                onDragEnd: onDragEnd,
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OwnPortfolioView() {
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [about, setAbout] = useState<PortfolioAbout | null>(null);
@@ -2042,6 +2117,7 @@ function OwnPortfolioView() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [resetting, setResetting] = useState(false);
   const [replaceTargetPostId, setReplaceTargetPostId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -2069,6 +2145,15 @@ function OwnPortfolioView() {
   }, []);
 
   const allPosts = result?.profiles.flatMap((p) => p.recentPosts.map((post) => ({ post, platform: p.platform }))) ?? [];
+
+  const matchesSearch = (post: CreatorPost) =>
+    !searchQuery.trim() || normalizeSearch(post.caption || "").includes(normalizeSearch(searchQuery));
+
+  const indexedPosts = allPosts.map((entry, globalIndex) => ({ ...entry, globalIndex }));
+  const videoEntries = indexedPosts.filter((e) => e.post.isVideo);
+  const photoEntries = indexedPosts.filter((e) => !e.post.isVideo);
+  const filteredVideoEntries = videoEntries.filter((e) => matchesSearch(e.post));
+  const filteredPhotoEntries = photoEntries.filter((e) => matchesSearch(e.post));
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0 || !result) return;
@@ -2313,7 +2398,31 @@ function OwnPortfolioView() {
         portfolioId={result?.id ?? null}
         onEditClick={() => setEditingProfile(true)}
       />
-      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        extra={
+          activeTab === "Portfolio" && allPosts.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-bk-text-muted" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search"
+                  className="pl-8 pr-3 py-1.5 rounded-lg border border-bk-border text-sm w-56 text-bk-text-primary placeholder:text-bk-text-muted focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple transition-colors"
+                />
+              </div>
+              <button
+                title="Filters (coming soon)"
+                className="w-8 h-8 rounded-lg border border-bk-border flex items-center justify-center text-bk-text-secondary hover:bg-bk-bg-light transition-colors flex-shrink-0"
+              >
+                <SlidersHorizontal size={14} />
+              </button>
+            </div>
+          ) : undefined
+        }
+      />
 
       {error && (
         <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
@@ -2404,24 +2513,32 @@ function OwnPortfolioView() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                      {allPosts.map(({ post }, i) => (
-                        <PortfolioMediaCard
-                          key={post.id ?? i}
-                          post={post}
-                          onOpen={() => setLightboxIndex(i)}
-                          onDelete={() => post.id && handleDeletePost(post.id)}
-                          onEdit={() => post.id && handleEditPost(post.id)}
-                          dragProps={{
-                            draggable: true,
-                            onDragStart: () => setDragIndex(i),
-                            onDragOver: (e) => e.preventDefault(),
-                            onDrop: () => handleDrop(i),
-                            onDragEnd: () => setDragIndex(null),
-                          }}
-                        />
-                      ))}
-                    </div>
+                    <PortfolioTypeSection
+                      title="Videos"
+                      emoji="🎥"
+                      emptyText="Your portfolio contains all of your work brands will see. Make sure you include a variety of video examples that best highlight your skills as a creator."
+                      entries={filteredVideoEntries}
+                      hasAnyOfType={videoEntries.length > 0}
+                      onOpen={setLightboxIndex}
+                      onDelete={handleDeletePost}
+                      onEdit={handleEditPost}
+                      onDragStart={setDragIndex}
+                      onDrop={handleDrop}
+                      onDragEnd={() => setDragIndex(null)}
+                    />
+                    <PortfolioTypeSection
+                      title="Photos"
+                      emoji="📷"
+                      emptyText="Your portfolio contains all of your work brands will see. Make sure you include a variety of photo examples that best highlight your skills as a creator."
+                      entries={filteredPhotoEntries}
+                      hasAnyOfType={photoEntries.length > 0}
+                      onOpen={setLightboxIndex}
+                      onDelete={handleDeletePost}
+                      onEdit={handleEditPost}
+                      onDragStart={setDragIndex}
+                      onDrop={handleDrop}
+                      onDragEnd={() => setDragIndex(null)}
+                    />
                   </>
                 )}
               </div>
