@@ -2248,7 +2248,11 @@ function OwnPortfolioView() {
     );
   }
 
-  const firstProfile = result?.profiles[0];
+  // Prefer a real scraped social profile (has a name/photo) over the manual
+  // "Uploads" profile, which is just a bucket for directly-uploaded content.
+  const firstProfile =
+    result?.profiles.find((p) => p.platform === "instagram" || p.platform === "tiktok") ??
+    result?.profiles[0];
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

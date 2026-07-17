@@ -25,7 +25,10 @@ export default async function PublicPortfolioPage({
   }
 
   const { profiles, aiAnalysis, about } = portfolio;
-  const firstProfile = profiles[0];
+  // Prefer a real scraped social profile (has a name/photo) over the manual
+  // "Uploads" profile, which is just a bucket for directly-uploaded content.
+  const firstProfile =
+    profiles.find((p) => p.platform === "instagram" || p.platform === "tiktok") ?? profiles[0];
   const name = portfolio.profileOverrides.displayName || firstProfile?.displayName || "Creator";
   const profilePicUrl = portfolio.profileOverrides.profilePicUrl || firstProfile?.profilePicUrl;
   const initial = name.charAt(0).toUpperCase();
