@@ -7,11 +7,13 @@ import {
   Megaphone, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
   Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search, Copy,
+  FolderOpen, UploadCloud,
 } from "lucide-react";
 import {
   FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
 } from "react-icons/fa6";
 import { BrkawayLogo } from "@/lib/BrkawayLogo";
+import { getSupabaseBrowser } from "@/lib/supabase-browser";
 import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary } from "@/lib/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -62,21 +64,30 @@ function buildLoadingSteps(igUrl: string, ttUrl: string, ytUrl: string): string[
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS: { icon: typeof LayoutDashboard; label: string; isCreators?: boolean }[] = [
+type MainView = "creators" | "portfolio";
+
+const NAV_ITEMS: { icon: typeof LayoutDashboard; label: string; target?: MainView }[] = [
   { icon: LayoutDashboard, label: "Dashboard" },
   { icon: Bell, label: "Notifications" },
   { icon: MessageSquare, label: "Messages" },
   { icon: Briefcase, label: "Deliverables" },
   { icon: Handshake, label: "Collabs" },
   { icon: Megaphone, label: "Opportunities" },
-  { icon: Users, label: "External Creators", isCreators: true },
+  { icon: Users, label: "External Creators", target: "creators" },
+  { icon: FolderOpen, label: "Portfolio", target: "portfolio" },
   { icon: CircleDollarSign, label: "Invoicing" },
   { icon: SquarePlay, label: "Content Library" },
   { icon: Building2, label: "Brands" },
   { icon: FileEdit, label: "External Reviews" },
 ];
 
-function Sidebar({ onNavigateCreators }: { onNavigateCreators: () => void }) {
+function Sidebar({
+  activeTarget,
+  onNavigate,
+}: {
+  activeTarget: MainView;
+  onNavigate: (target: MainView) => void;
+}) {
   const [expanded, setExpanded] = useState(true);
 
   return (
@@ -96,26 +107,27 @@ function Sidebar({ onNavigateCreators }: { onNavigateCreators: () => void }) {
         </button>
       </div>
       <nav className="flex-1 space-y-0.5">
-        {NAV_ITEMS.map(({ icon: Icon, label, isCreators }) => (
-          <button
-            key={label}
-            onClick={isCreators ? onNavigateCreators : undefined}
-            className={`relative w-full flex items-center gap-3 pl-[22px] pr-3 h-9 text-sm font-medium transition-colors ${
-              isCreators
-                ? "text-bk-text-primary"
-                : "text-bk-text-secondary cursor-default"
-            }`}
-          >
-            {isCreators && (
-              <span
-                className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
-                style={{ background: "var(--gradient-brand)" }}
-              />
-            )}
-            <Icon size={15} className="flex-shrink-0" />
-            {expanded && <span className="whitespace-nowrap">{label}</span>}
-          </button>
-        ))}
+        {NAV_ITEMS.map(({ icon: Icon, label, target }) => {
+          const isActive = !!target && target === activeTarget;
+          return (
+            <button
+              key={label}
+              onClick={target ? () => onNavigate(target) : undefined}
+              className={`relative w-full flex items-center gap-3 pl-[22px] pr-3 h-9 text-sm font-medium transition-colors ${
+                target ? "text-bk-text-primary" : "text-bk-text-secondary cursor-default"
+              }`}
+            >
+              {isActive && (
+                <span
+                  className="absolute left-0 top-0 bottom-0 w-1 rounded-r-sm"
+                  style={{ background: "var(--gradient-brand)" }}
+                />
+              )}
+              <Icon size={15} className="flex-shrink-0" />
+              {expanded && <span className="whitespace-nowrap">{label}</span>}
+            </button>
+          );
+        })}
       </nav>
     </aside>
   );
@@ -352,7 +364,7 @@ function RightPanel({ result }: { result: GenerateResponse | null }) {
   const [dismissed, setDismissed] = useState(false);
   const igProfile = result?.profiles.find((p) => p.platform === "instagram");
   const ttProfile = result?.profiles.find((p) => p.platform === "tiktok");
-  const hasResult = !!result;
+  const hasResult = !!result && result.profiles.some((p) => p.recentPosts.length > 0);
 
   const steps = [
     { title: "Step 1: Add Videos/Photos", isComplete: hasResult, isActive: !hasResult },
@@ -1823,9 +1835,358 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
   );
 }
 
+// ─── Own Portfolio View ──────────────────────────────────────────────────────
+
+// Matches the real Brkaway portfolio grid: media only, no likes/comments/views
+// (those are meaningful for scraped social content, not for a creator's own uploads).
+function PortfolioMediaCard({ post, onOpen }: { post: CreatorPost; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="relative aspect-[9/16] bg-bk-border-light rounded-xl overflow-hidden border border-bk-border hover:shadow-md transition-shadow group text-left"
+    >
+      {post.isVideo && post.videoUrl ? (
+        <video
+          src={post.videoUrl}
+          className="absolute inset-0 w-full h-full object-cover"
+          muted
+          playsInline
+          preload="metadata"
+        />
+      ) : post.thumbnailUrl ? (
+        <Image
+          src={post.thumbnailUrl}
+          alt=""
+          fill
+          className="object-cover group-hover:scale-105 transition-transform duration-300"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-bk-border-light" />
+      )}
+      {post.isVideo && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
+            <Play size={16} className="text-white fill-white ml-0.5" />
+          </div>
+        </div>
+      )}
+    </button>
+  );
+}
+
+function PortfolioMediaLightbox({
+  post,
+  onClose,
+  onNext,
+  onPrev,
+}: {
+  post: CreatorPost;
+  onClose: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+}) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") onNext();
+      if (e.key === "ArrowLeft") onPrev();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose, onNext, onPrev]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
+      <button
+        onClick={onClose}
+        className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+      >
+        <X size={18} />
+      </button>
+      <button
+        onClick={onPrev}
+        className="absolute left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+        aria-label="Previous"
+      >
+        ‹
+      </button>
+      <button
+        onClick={onNext}
+        className="absolute right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+        aria-label="Next"
+      >
+        ›
+      </button>
+
+      <div className="relative bg-black rounded-2xl overflow-hidden shadow-2xl w-[360px] aspect-[9/16]">
+        {post.isVideo && post.videoUrl ? (
+          <video
+            key={post.id ?? post.videoUrl}
+            src={post.videoUrl}
+            controls
+            autoPlay
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        ) : post.thumbnailUrl ? (
+          <Image src={post.thumbnailUrl} alt="" fill className="object-contain" />
+        ) : (
+          <div className="absolute inset-0 bg-bk-border-light" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OwnPortfolioView() {
+  const [result, setResult] = useState<GenerateResponse | null>(null);
+  const [about, setAbout] = useState<PortfolioAbout | null>(null);
+  const [profileOverrides, setProfileOverrides] = useState<ProfileOverrides | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("Portfolio");
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadOwn = () => {
+    setLoading(true);
+    fetch("/api/portfolio/own")
+      .then((res) => res.json())
+      .then((data) => {
+        setResult({
+          id: data.id,
+          isSaved: data.isSaved,
+          profiles: data.profiles,
+          aiAnalysis: data.aiAnalysis,
+          generatedAt: data.generatedAt,
+        });
+        setAbout(data.about ?? null);
+        setProfileOverrides(data.profileOverrides ?? null);
+      })
+      .catch(() => setError("Couldn't load your portfolio."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadOwn();
+  }, []);
+
+  const allPosts = result?.profiles.flatMap((p) => p.recentPosts.map((post) => ({ post, platform: p.platform }))) ?? [];
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !result) return;
+    setUploading(true);
+    setError(null);
+    try {
+      for (const file of Array.from(files)) {
+        const isVideo = file.type.startsWith("video/");
+        const signRes = await fetch("/api/portfolio/own/upload/sign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, contentType: file.type }),
+        });
+        if (!signRes.ok) throw new Error("sign failed");
+        const { path, token, publicUrl } = await signRes.json();
+
+        const { error: uploadError } = await getSupabaseBrowser()
+          .storage.from("portfolio-uploads")
+          .uploadToSignedUrl(path, token, file);
+        if (uploadError) throw uploadError;
+
+        const completeRes = await fetch("/api/portfolio/own/upload/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ publicUrl, isVideo }),
+        });
+        if (!completeRes.ok) throw new Error("complete failed");
+      }
+      loadOwn();
+    } catch {
+      setError("Couldn't upload the file. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleGenerateAi = async (ig: string, tt: string, yt: string) => {
+    if (!result) return;
+    setShowAiModal(false);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          instagramUrl: ig,
+          tiktokUrl: tt,
+          youtubeUrl: yt || undefined,
+          portfolioId: result.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Error generating portfolio");
+        setLoading(false);
+        return;
+      }
+      loadOwn();
+    } catch {
+      setError("Connection error. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  const handleSaveAbout = async (updated: PortfolioAbout) => {
+    if (!result) return;
+    const res = await fetch("/api/portfolio/about", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...updated, portfolioId: result.id }),
+    });
+    if (!res.ok) {
+      setError("Couldn't save the information. Please try again.");
+      throw new Error("save about failed");
+    }
+    setAbout(await res.json());
+  };
+
+  const handleSaveProfile = async (updated: ProfileOverrides) => {
+    if (!result) return;
+    const res = await fetch("/api/portfolio/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...updated, portfolioId: result.id }),
+    });
+    if (!res.ok) {
+      setError("Couldn't save the profile. Please try again.");
+      throw new Error("save profile failed");
+    }
+    setProfileOverrides(await res.json());
+  };
+
+  if (loading && !result) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 size={28} className="text-bk-purple animate-spin" />
+      </div>
+    );
+  }
+
+  const firstProfile = result?.profiles[0];
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <ProfileHeader
+        profile={firstProfile}
+        profiles={result?.profiles ?? []}
+        overrides={profileOverrides}
+        portfolioId={result?.id ?? null}
+        onEditClick={() => setEditingProfile(true)}
+      />
+      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+
+      {error && (
+        <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <X size={14} className="text-red-500" />
+          <p className="text-sm text-red-700">{error}</p>
+          <button onClick={() => setError(null)} className="ml-auto"><X size={14} className="text-red-400" /></button>
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden">
+          {activeTab === "Portfolio" && (
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-8 space-y-6">
+                <div className="border-2 border-dashed border-bk-border rounded-2xl bg-bk-bg p-10 space-y-4">
+                  <div className="text-center space-y-1">
+                    <h2 className="text-lg font-bold text-bk-text-primary">Portfolio 🎨</h2>
+                    <p className="text-sm text-bk-text-secondary max-w-md mx-auto">
+                      Your portfolio contains all of your work brands will see. Make sure you include a variety
+                      of video &amp; photo examples that best highlight your skills as a creator.
+                    </p>
+                  </div>
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleFiles(e.dataTransfer.files);
+                    }}
+                    className="flex flex-col items-center gap-2 py-6"
+                  >
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
+                    >
+                      <UploadCloud size={15} /> {uploading ? "Uploading..." : "Upload Content"}
+                    </button>
+                    <p className="text-xs text-bk-text-muted">or drag and drop files here</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handleFiles(e.target.files)}
+                    />
+                    <button
+                      onClick={() => setShowAiModal(true)}
+                      className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors mt-1"
+                    >
+                      <span>✦</span> Create Portfolio AI
+                    </button>
+                  </div>
+                </div>
+
+                {allPosts.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {allPosts.map(({ post }, i) => (
+                      <PortfolioMediaCard key={post.id ?? i} post={post} onOpen={() => setLightboxIndex(i)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {activeTab === "About" && <AboutTab about={about} onSave={handleSaveAbout} />}
+          {activeTab !== "Portfolio" && activeTab !== "About" && <ComingSoonTab label={activeTab} />}
+        </div>
+
+        <RightPanel result={result} />
+      </div>
+
+      {lightboxIndex !== null && allPosts[lightboxIndex] && (
+        <PortfolioMediaLightbox
+          post={allPosts[lightboxIndex].post}
+          onClose={() => setLightboxIndex(null)}
+          onNext={() => setLightboxIndex((i) => (i === null ? null : (i + 1) % allPosts.length))}
+          onPrev={() => setLightboxIndex((i) => (i === null ? null : (i - 1 + allPosts.length) % allPosts.length))}
+        />
+      )}
+
+      {showAiModal && <URLModal onClose={() => setShowAiModal(false)} onSubmit={handleGenerateAi} />}
+
+      {editingProfile && (
+        <EditProfileModal
+          overrides={profileOverrides}
+          fallbackName={firstProfile?.displayName ?? ""}
+          fallbackPicUrl={firstProfile?.profilePicUrl ?? null}
+          onClose={() => setEditingProfile(false)}
+          onSave={handleSaveProfile}
+        />
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function Home() {
+  const [mainView, setMainView] = useState<MainView>("creators");
   const [creatorsView, setCreatorsView] = useState<"list" | "detail">("list");
   const [pageState, setPageState] = useState<PageState>("empty");
   const [initializing, setInitializing] = useState(true);
@@ -1876,6 +2237,11 @@ export default function Home() {
   }, [creatorsView]);
 
   const handleBackToList = () => setCreatorsView("list");
+
+  const handleNavigate = (target: MainView) => {
+    setMainView(target);
+    if (target === "creators") handleBackToList();
+  };
 
   const handleSelectCreator = async (id: string) => {
     setInitializing(true);
@@ -2110,9 +2476,11 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-bk-bg-light overflow-hidden">
-      <Sidebar onNavigateCreators={handleBackToList} />
+      <Sidebar activeTarget={mainView} onNavigate={handleNavigate} />
 
-      {creatorsView === "list" ? (
+      {mainView === "portfolio" ? (
+        <OwnPortfolioView />
+      ) : creatorsView === "list" ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           {successMessage && (
             <div className="mx-8 mt-4 flex items-center gap-2 bg-bk-success-light border border-bk-success/20 rounded-xl px-4 py-3">
@@ -2198,7 +2566,7 @@ export default function Home() {
         </div>
       )}
 
-      {pageState === "modal" && (
+      {mainView === "creators" && pageState === "modal" && (
         <URLModal
           onClose={() => setPageState(result ? "result" : "empty")}
           onSubmit={handleGenerate}
@@ -2215,7 +2583,7 @@ export default function Home() {
         />
       )}
 
-      {editingProfile && (
+      {mainView === "creators" && editingProfile && (
         <EditProfileModal
           overrides={profileOverrides}
           fallbackName={firstProfile?.displayName ?? ""}

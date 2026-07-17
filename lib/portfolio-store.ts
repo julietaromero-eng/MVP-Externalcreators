@@ -47,6 +47,7 @@ export async function listPortfolios(): Promise<PortfolioSummary[]> {
     .select("id, display_name, profile_pic_url, generated_at")
     .not("generated_at", "is", null)
     .eq("is_saved", true)
+    .eq("is_own_portfolio", false)
     .order("generated_at", { ascending: false });
   if (portfoliosError) throw portfoliosError;
   if (!portfolioRows || portfolioRows.length === 0) return [];
@@ -237,24 +238,10 @@ export interface LoadedPortfolio {
   profileOverrides: ProfileOverrides;
 }
 
-export async function loadPortfolio(portfolioId?: string): Promise<LoadedPortfolio | null> {
-  const supabase = getSupabaseAdmin();
-
-  // With no explicit id, only the current unsaved draft is eligible — once a
-  // portfolio is saved it belongs to the Creators list, not the working tab.
-  const { data: portfolio } = portfolioId
-    ? await supabase.from("portfolios").select("*").eq("id", portfolioId).maybeSingle()
-    : await supabase
-        .from("portfolios")
-        .select("*")
-        .not("generated_at", "is", null)
-        .eq("is_saved", false)
-        .order("generated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-  if (!portfolio || !portfolio.generated_at) return null;
-
+async function buildLoadedPortfolio(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  portfolio: Record<string, unknown>
+): Promise<LoadedPortfolio> {
   const { data: profileRows, error: profilesError } = await supabase
     .from("profiles")
     .select("*")
@@ -297,7 +284,7 @@ export async function loadPortfolio(portfolioId?: string): Promise<LoadedPortfol
     isSaved: (portfolio.is_saved as boolean) ?? false,
     profiles,
     aiAnalysis,
-    generatedAt: portfolio.generated_at as string,
+    generatedAt: (portfolio.generated_at as string) ?? "",
     about: {
       bio: (portfolio.about_bio as string) ?? "",
       hobbiesAndPassions: (portfolio.about_hobbies as string) ?? "",
@@ -317,6 +304,112 @@ export async function loadPortfolio(portfolioId?: string): Promise<LoadedPortfol
       profilePicUrl: (portfolio.profile_pic_url as string) ?? null,
     },
   };
+}
+
+export async function loadPortfolio(portfolioId?: string): Promise<LoadedPortfolio | null> {
+  const supabase = getSupabaseAdmin();
+
+  if (portfolioId) {
+    const { data: portfolio } = await supabase
+      .from("portfolios")
+      .select("*")
+      .eq("id", portfolioId)
+      .maybeSingle();
+    if (!portfolio) return null;
+    return buildLoadedPortfolio(supabase, portfolio);
+  }
+
+  // With no explicit id, only the current unsaved draft is eligible — once a
+  // portfolio is saved it belongs to the Creators list, not the working tab.
+  // The own-portfolio row is excluded — it's never the External Creators draft.
+  const { data: portfolio } = await supabase
+    .from("portfolios")
+    .select("*")
+    .not("generated_at", "is", null)
+    .eq("is_saved", false)
+    .eq("is_own_portfolio", false)
+    .order("generated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!portfolio) return null;
+  return buildLoadedPortfolio(supabase, portfolio);
+}
+
+export async function loadOwnPortfolio(): Promise<LoadedPortfolio> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: existing } = await supabase
+    .from("portfolios")
+    .select("*")
+    .eq("is_own_portfolio", true)
+    .maybeSingle();
+
+  if (existing) return buildLoadedPortfolio(supabase, existing);
+
+  const { data: created, error } = await supabase
+    .from("portfolios")
+    .insert({ is_own_portfolio: true })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return buildLoadedPortfolio(supabase, created);
+}
+
+export async function ensureManualUploadsProfile(portfolioId: string): Promise<string> {
+  const supabase = getSupabaseAdmin();
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        portfolio_id: portfolioId,
+        platform: "other",
+        username: "uploads",
+        display_name: "Uploads",
+        status: "active",
+      },
+      { onConflict: "portfolio_id,platform" }
+    )
+    .select("id")
+    .single();
+
+  if (error) throw error;
+  return data.id as string;
+}
+
+export async function insertManualPost(
+  profileId: string,
+  { publicUrl, isVideo }: { publicUrl: string; isVideo: boolean }
+): Promise<CreatorPost> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: last } = await supabase
+    .from("posts")
+    .select("sort_order")
+    .eq("profile_id", profileId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("posts")
+    .insert({
+      profile_id: profileId,
+      thumbnail_url: publicUrl,
+      video_url: isVideo ? publicUrl : null,
+      is_video: isVideo,
+      post_url: null,
+      caption: "",
+      likes_count: 0,
+      comments_count: 0,
+      sort_order: ((last?.sort_order as number) ?? -1) + 1,
+    })
+    .select("*")
+    .single();
+
+  if (error) throw error;
+  return postRowToCreatorPost(data);
 }
 
 export interface PostOperation {
