@@ -7,7 +7,7 @@ import {
   Megaphone, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
   Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search, Copy,
-  FolderOpen, UploadCloud,
+  FolderOpen, UploadCloud, Trash2,
 } from "lucide-react";
 import {
   FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
@@ -1839,38 +1839,64 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
 
 // Matches the real Brkaway portfolio grid: media only, no likes/comments/views
 // (those are meaningful for scraped social content, not for a creator's own uploads).
-function PortfolioMediaCard({ post, onOpen }: { post: CreatorPost; onOpen: () => void }) {
+function PortfolioMediaCard({
+  post,
+  onOpen,
+  onDelete,
+  dragProps,
+}: {
+  post: CreatorPost;
+  onOpen: () => void;
+  onDelete: () => void;
+  dragProps: React.HTMLAttributes<HTMLDivElement>;
+}) {
   return (
-    <button
-      onClick={onOpen}
-      className="relative aspect-[9/16] bg-bk-border-light rounded-xl overflow-hidden border border-bk-border hover:shadow-md transition-shadow group text-left"
+    <div
+      {...dragProps}
+      className="relative aspect-[9/16] bg-bk-border-light rounded-xl overflow-hidden border border-bk-border hover:shadow-md transition-shadow group"
     >
-      {post.isVideo && post.videoUrl ? (
-        <video
-          src={post.videoUrl}
-          className="absolute inset-0 w-full h-full object-cover"
-          muted
-          playsInline
-          preload="metadata"
-        />
-      ) : post.thumbnailUrl ? (
-        <Image
-          src={post.thumbnailUrl}
-          alt=""
-          fill
-          className="object-cover group-hover:scale-105 transition-transform duration-300"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-bk-border-light" />
-      )}
-      {post.isVideo && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
-            <Play size={16} className="text-white fill-white ml-0.5" />
+      <button onClick={onOpen} className="absolute inset-0 w-full h-full text-left">
+        {post.isVideo && post.videoUrl ? (
+          <video
+            src={post.videoUrl}
+            className="absolute inset-0 w-full h-full object-cover"
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : post.thumbnailUrl ? (
+          <Image
+            src={post.thumbnailUrl}
+            alt=""
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-bk-border-light" />
+        )}
+        {post.isVideo && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-sm flex items-center justify-center">
+              <Play size={16} className="text-white fill-white ml-0.5" />
+            </div>
           </div>
-        </div>
-      )}
-    </button>
+        )}
+      </button>
+
+      <div className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
+        <GripVertical size={14} />
+      </div>
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 hover:bg-red-500 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
   );
 }
 
@@ -1949,6 +1975,8 @@ function OwnPortfolioView() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [resetting, setResetting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadOwn = () => {
@@ -2067,6 +2095,93 @@ function OwnPortfolioView() {
     setProfileOverrides(await res.json());
   };
 
+  const handleDeletePost = (postId: string) => {
+    if (!result) return;
+    const snapshot = result;
+    setResult({
+      ...result,
+      profiles: result.profiles.map((p) => ({
+        ...p,
+        recentPosts: p.recentPosts.filter((post) => post.id !== postId),
+      })),
+    });
+
+    fetch("/api/portfolio/posts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operations: [{ id: postId, deletedAt: new Date().toISOString() }] }),
+    })
+      .then((res) => { if (!res.ok) throw new Error(); })
+      .catch(() => {
+        setResult(snapshot);
+        setError("Couldn't delete the photo. Please try again.");
+      });
+  };
+
+  const handleReorder = (newOrder: { post: CreatorPost; platform: Platform }[]) => {
+    if (!result) return;
+    const snapshot = result;
+
+    const byPlatform = new Map<Platform, CreatorPost[]>();
+    for (const { post, platform } of newOrder) {
+      if (!byPlatform.has(platform)) byPlatform.set(platform, []);
+      byPlatform.get(platform)!.push(post);
+    }
+
+    const operations: { id: string; sortOrder: number }[] = [];
+    const updatedProfiles = result.profiles.map((profile) => {
+      const posts = byPlatform.get(profile.platform);
+      if (!posts) return profile;
+      const withOrder = posts.map((post, i) => {
+        if (post.id) operations.push({ id: post.id, sortOrder: i });
+        return { ...post, sortOrder: i };
+      });
+      return { ...profile, recentPosts: withOrder };
+    });
+
+    setResult({ ...result, profiles: updatedProfiles });
+
+    if (operations.length === 0) return;
+    fetch("/api/portfolio/posts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operations }),
+    })
+      .then((res) => { if (!res.ok) throw new Error(); })
+      .catch(() => {
+        setResult(snapshot);
+        setError("Couldn't save the new order. Please try again.");
+      });
+  };
+
+  const handleDrop = (targetIndex: number) => {
+    if (dragIndex === null || dragIndex === targetIndex) {
+      setDragIndex(null);
+      return;
+    }
+    const reordered = [...allPosts];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(targetIndex, 0, moved);
+    setDragIndex(null);
+    handleReorder(reordered);
+  };
+
+  const handleResetPortfolio = async () => {
+    if (!window.confirm("This will permanently delete everything in your portfolio (uploads, AI-generated content, and About info) so you can start over. Continue?")) {
+      return;
+    }
+    setResetting(true);
+    try {
+      const res = await fetch("/api/portfolio/own/reset", { method: "POST" });
+      if (!res.ok) throw new Error();
+      loadOwn();
+    } catch {
+      setError("Couldn't reset the portfolio. Please try again.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (loading && !result) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -2101,53 +2216,93 @@ function OwnPortfolioView() {
           {activeTab === "Portfolio" && (
             <div className="flex-1 overflow-y-auto">
               <div className="p-8 space-y-6">
-                <div className="border-2 border-dashed border-bk-border rounded-2xl bg-bk-bg p-10 space-y-4">
-                  <div className="text-center space-y-1">
-                    <h2 className="text-lg font-bold text-bk-text-primary">Portfolio 🎨</h2>
-                    <p className="text-sm text-bk-text-secondary max-w-md mx-auto">
-                      Your portfolio contains all of your work brands will see. Make sure you include a variety
-                      of video &amp; photo examples that best highlight your skills as a creator.
-                    </p>
-                  </div>
-                  <div
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleFiles(e.dataTransfer.files);
-                    }}
-                    className="flex flex-col items-center gap-2 py-6"
-                  >
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                      className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
-                    >
-                      <UploadCloud size={15} /> {uploading ? "Uploading..." : "Upload Content"}
-                    </button>
-                    <p className="text-xs text-bk-text-muted">or drag and drop files here</p>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,video/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => handleFiles(e.target.files)}
-                    />
-                    <button
-                      onClick={() => setShowAiModal(true)}
-                      className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors mt-1"
-                    >
-                      <span>✦</span> Create Portfolio AI
-                    </button>
-                  </div>
-                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => handleFiles(e.target.files)}
+                />
 
-                {allPosts.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                    {allPosts.map(({ post }, i) => (
-                      <PortfolioMediaCard key={post.id ?? i} post={post} onOpen={() => setLightboxIndex(i)} />
-                    ))}
+                {allPosts.length === 0 ? (
+                  <div className="border-2 border-dashed border-bk-border rounded-2xl bg-bk-bg p-10 space-y-4">
+                    <div className="text-center space-y-1">
+                      <h2 className="text-lg font-bold text-bk-text-primary">Portfolio 🎨</h2>
+                      <p className="text-sm text-bk-text-secondary max-w-md mx-auto">
+                        Your portfolio contains all of your work brands will see. Make sure you include a variety
+                        of video &amp; photo examples that best highlight your skills as a creator.
+                      </p>
+                    </div>
+                    <div
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleFiles(e.dataTransfer.files);
+                      }}
+                      className="flex flex-col items-center gap-2 py-6"
+                    >
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
+                      >
+                        <UploadCloud size={15} /> {uploading ? "Uploading..." : "Upload Content"}
+                      </button>
+                      <p className="text-xs text-bk-text-muted">or drag and drop files here</p>
+                      <button
+                        onClick={() => setShowAiModal(true)}
+                        className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors mt-1"
+                      >
+                        <span>✦</span> Create Portfolio AI
+                      </button>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-bold text-bk-text-primary mr-auto">Portfolio</h2>
+                      <button
+                        onClick={handleResetPortfolio}
+                        disabled={resetting}
+                        title="Delete everything and start over"
+                        className="flex items-center gap-1.5 border border-bk-border text-red-600 font-medium px-3 py-2 rounded-xl text-sm hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 size={14} /> {resetting ? "Resetting..." : "Delete Portfolio"}
+                      </button>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-3 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors disabled:opacity-50"
+                      >
+                        <UploadCloud size={14} /> {uploading ? "Uploading..." : "Upload Content"}
+                      </button>
+                      <button
+                        onClick={() => setShowAiModal(true)}
+                        className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-3 py-2 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
+                      >
+                        <span>✦</span> Regenerate Portfolio AI
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                      {allPosts.map(({ post }, i) => (
+                        <PortfolioMediaCard
+                          key={post.id ?? i}
+                          post={post}
+                          onOpen={() => setLightboxIndex(i)}
+                          onDelete={() => post.id && handleDeletePost(post.id)}
+                          dragProps={{
+                            draggable: true,
+                            onDragStart: () => setDragIndex(i),
+                            onDragOver: (e) => e.preventDefault(),
+                            onDrop: () => handleDrop(i),
+                            onDragEnd: () => setDragIndex(null),
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </div>

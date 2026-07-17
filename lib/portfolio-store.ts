@@ -490,3 +490,48 @@ export async function saveAiSummary(portfolioId: string, summary: string): Promi
   if (error) throw error;
   return summary;
 }
+
+// Wipes all content from the own-portfolio singleton (posts, profiles, AI
+// analysis, About fields) but keeps the same row/id so the public link stays
+// stable. Lets the creator re-test the empty -> populated flow from scratch.
+export async function resetOwnPortfolio(): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: portfolio } = await supabase
+    .from("portfolios")
+    .select("id")
+    .eq("is_own_portfolio", true)
+    .maybeSingle();
+  if (!portfolio) return;
+
+  const { data: profiles } = await supabase.from("profiles").select("id").eq("portfolio_id", portfolio.id);
+  const profileIds = (profiles ?? []).map((p) => p.id as string);
+
+  if (profileIds.length > 0) {
+    await supabase.from("posts").delete().in("profile_id", profileIds);
+    await supabase.from("profiles").delete().in("id", profileIds);
+  }
+  await supabase.from("ai_analyses").delete().eq("portfolio_id", portfolio.id);
+
+  await supabase
+    .from("portfolios")
+    .update({
+      generated_at: null,
+      is_saved: false,
+      display_name: null,
+      profile_pic_url: null,
+      about_bio: "",
+      about_hobbies: "",
+      about_industries: [],
+      about_content_types: [],
+      about_pronouns: null,
+      about_age: null,
+      about_location: null,
+      about_languages: "",
+      about_nationality: [],
+      contact_email: null,
+      social_links: EMPTY_SOCIAL_LINKS,
+      booking_links: EMPTY_BOOKING_LINKS,
+    })
+    .eq("id", portfolio.id);
+}
