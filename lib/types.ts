@@ -93,3 +93,11 @@ export interface PortfolioSummary {
   platforms: Platform[];
   generatedAt: string | null;
 }
+
+export type CampaignGeo = "AR" | "CL";
+export type CampaignStage = "siembra" | "amplificacion";
+
+export interface CampaignCreatorSummary extends PortfolioSummary {
+  geo: CampaignGeo;
+  stage: CampaignStage;
+}

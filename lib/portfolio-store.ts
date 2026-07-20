@@ -2,6 +2,9 @@ import { getSupabaseAdmin } from "./supabase";
 import type {
   AIAnalysis,
   BookingLinks,
+  CampaignCreatorSummary,
+  CampaignGeo,
+  CampaignStage,
   CreatorPost,
   CreatorProfile,
   Platform,
@@ -555,4 +558,79 @@ export async function replacePostMedia(
 
   if (error) throw error;
   return postRowToCreatorPost(data);
+}
+
+export async function addCampaignCreator(
+  portfolioId: string,
+  geo: CampaignGeo,
+  stage: CampaignStage
+): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase
+    .from("campaign_creators")
+    .upsert({ portfolio_id: portfolioId, geo, stage }, { onConflict: "portfolio_id" });
+  if (error) throw error;
+}
+
+export async function removeCampaignCreator(portfolioId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const { error } = await supabase.from("campaign_creators").delete().eq("portfolio_id", portfolioId);
+  if (error) throw error;
+}
+
+export async function listCampaignCreators(): Promise<CampaignCreatorSummary[]> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: rosterRows, error: rosterError } = await supabase
+    .from("campaign_creators")
+    .select("portfolio_id, geo, stage")
+    .order("added_at", { ascending: true });
+  if (rosterError) throw rosterError;
+  if (!rosterRows || rosterRows.length === 0) return [];
+
+  const portfolioIds = rosterRows.map((r) => r.portfolio_id as string);
+
+  const { data: portfolioRows, error: portfoliosError } = await supabase
+    .from("portfolios")
+    .select("id, display_name, profile_pic_url, generated_at")
+    .in("id", portfolioIds);
+  if (portfoliosError) throw portfoliosError;
+
+  const { data: profileRows, error: profilesError } = await supabase
+    .from("profiles")
+    .select("portfolio_id, platform, username, display_name, profile_pic_url")
+    .in("portfolio_id", portfolioIds);
+  if (profilesError) throw profilesError;
+
+  const profilesByPortfolio = new Map<string, Record<string, unknown>[]>();
+  for (const row of profileRows ?? []) {
+    const key = row.portfolio_id as string;
+    if (!profilesByPortfolio.has(key)) profilesByPortfolio.set(key, []);
+    profilesByPortfolio.get(key)!.push(row);
+  }
+  const portfolioById = new Map((portfolioRows ?? []).map((p) => [p.id as string, p]));
+
+  return rosterRows
+    .map((roster): CampaignCreatorSummary | null => {
+      const portfolioId = roster.portfolio_id as string;
+      const portfolio = portfolioById.get(portfolioId);
+      if (!portfolio) return null;
+      const profiles = profilesByPortfolio.get(portfolioId) ?? [];
+      const primary = profiles.find((p) => p.platform === "instagram") ?? profiles[0];
+      return {
+        id: portfolioId,
+        displayName:
+          (portfolio.display_name as string) ||
+          (primary?.display_name as string) ||
+          (primary?.username as string) ||
+          "Untitled",
+        username: (primary?.username as string) ?? "",
+        profilePicUrl: (portfolio.profile_pic_url as string) || (primary?.profile_pic_url as string) || null,
+        platforms: profiles.map((p) => p.platform as Platform),
+        generatedAt: (portfolio.generated_at as string) ?? null,
+        geo: roster.geo as CampaignGeo,
+        stage: roster.stage as CampaignStage,
+      };
+    })
+    .filter((x): x is CampaignCreatorSummary => x !== null);
 }

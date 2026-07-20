@@ -7,14 +7,14 @@ import {
   Megaphone, Building2, CircleDollarSign, SquarePlay, FileEdit, Zap, Users, UserSearch,
   Link, Pencil, Check, Loader2, X, SlidersHorizontal, PanelLeftClose, PanelLeftOpen,
   Heart, MessageCircle, Eye, GripVertical, Globe, Video, Play, Archive, FileText, Sparkles, Search, Copy,
-  UploadCloud, Trash2, ClipboardCheck, Palette,
+  UploadCloud, Trash2, ClipboardCheck, Palette, BarChart3,
 } from "lucide-react";
 import {
   FaInstagram, FaTiktok, FaYoutube, FaLinkedin, FaXTwitter, FaThreads, FaFacebook, FaCalendar,
 } from "react-icons/fa6";
 import { BrkawayLogo } from "@/lib/BrkawayLogo";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary } from "@/lib/types";
+import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary, CampaignCreatorSummary, CampaignGeo, CampaignStage } from "@/lib/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ function buildLoadingSteps(igUrl: string, ttUrl: string, ytUrl: string): string[
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────
 
-type MainView = "creators" | "portfolio";
+type MainView = "creators" | "portfolio" | "metrics";
 
 const NAV_ITEMS: { icon: typeof HomeIcon; label: string; target?: MainView }[] = [
   { icon: HomeIcon, label: "Dashboard" },
@@ -77,6 +77,7 @@ const NAV_ITEMS: { icon: typeof HomeIcon; label: string; target?: MainView }[] =
   { icon: UserSearch, label: "External Creators", target: "creators" },
   { icon: Users, label: "Brands" },
   { icon: Palette, label: "Portfolio", target: "portfolio" },
+  { icon: BarChart3, label: "Metrics", target: "metrics" },
   { icon: CircleDollarSign, label: "Invoicing" },
   { icon: SquarePlay, label: "Content Library" },
   { icon: Building2, label: "External Reviews" },
@@ -1801,6 +1802,19 @@ function computeEngagement(
   return { rate, reach, isEstimated };
 }
 
+// Best-effort heuristic only — the scraped data has no real sponsored/paid
+// marker (confirmed by inspecting the raw API response directly), so this
+// just checks the caption for common ad-disclosure phrases.
+const AD_CAPTION_KEYWORDS = [
+  "#ad", "#sponsored", "#sponsoredpost", "#publicidad", "#pauta", "#pautado",
+  "paid partnership", "sponsored by", "en colaboracion con",
+];
+
+function isLikelyOrganic(caption: string): boolean {
+  const normalized = normalizeSearch(caption || "");
+  return !AD_CAPTION_KEYWORDS.some((kw) => normalized.includes(normalizeSearch(kw)));
+}
+
 function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
   const platformStats = result.profiles
     .filter((profile) => profile.recentPosts.length > 0)
@@ -1892,6 +1906,588 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── Metrics ─────────────────────────────────────────────────────────────────
+
+const GEO_OPTIONS: { value: CampaignGeo; label: string }[] = [
+  { value: "AR", label: "Argentina (AR)" },
+  { value: "CL", label: "Chile (CL)" },
+];
+const STAGE_OPTIONS: { value: CampaignStage; label: string }[] = [
+  { value: "siembra", label: "Siembra" },
+  { value: "amplificacion", label: "Amplificación" },
+];
+
+function GeoStageSelects({
+  geo,
+  stage,
+  onGeoChange,
+  onStageChange,
+}: {
+  geo: CampaignGeo;
+  stage: CampaignStage;
+  onGeoChange: (geo: CampaignGeo) => void;
+  onStageChange: (stage: CampaignStage) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={geo}
+        onChange={(e) => onGeoChange(e.target.value as CampaignGeo)}
+        className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+      >
+        {GEO_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <select
+        value={stage}
+        onChange={(e) => onStageChange(e.target.value as CampaignStage)}
+        className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+      >
+        {STAGE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function AddInternalCreatorModal({
+  savedCreators,
+  existingIds,
+  onAdd,
+  onClose,
+}: {
+  savedCreators: PortfolioSummary[];
+  existingIds: Set<string>;
+  onAdd: (portfolioId: string, geo: CampaignGeo, stage: CampaignStage) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [geo, setGeo] = useState<CampaignGeo>("AR");
+  const [stage, setStage] = useState<CampaignStage>("siembra");
+  const [addingId, setAddingId] = useState<string | null>(null);
+
+  const normalizedSearch = normalizeSearch(search);
+  const filtered = savedCreators.filter((c) => {
+    if (existingIds.has(c.id)) return false;
+    if (!normalizedSearch) return true;
+    return (
+      normalizeSearch(c.displayName).includes(normalizedSearch) ||
+      normalizeSearch(c.username).includes(normalizedSearch)
+    );
+  });
+
+  const handleAdd = async (id: string) => {
+    setAddingId(id);
+    try {
+      await onAdd(id, geo, stage);
+    } finally {
+      setAddingId(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-bk-bg rounded-2xl shadow-2xl w-[520px] max-h-[80vh] flex flex-col p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-bk-text-primary">Add Internal Creator</h2>
+          <button onClick={onClose} className="text-bk-text-muted hover:text-bk-text-primary"><X size={18} /></button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-bk-text-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search saved creators..."
+              className="w-full pl-8 pr-3 py-2 rounded-lg border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 bg-bk-bg-light rounded-xl px-3 py-2.5">
+          <span className="text-xs font-medium text-bk-text-secondary">Tag new adds as:</span>
+          <GeoStageSelects geo={geo} stage={stage} onGeoChange={setGeo} onStageChange={setStage} />
+        </div>
+
+        <div className="flex-1 overflow-y-auto space-y-1.5 -mx-2 px-2">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-bk-text-muted text-center py-8">
+              {savedCreators.length === 0 ? "No saved creators yet." : "No results, or all matches are already in the campaign."}
+            </p>
+          ) : (
+            filtered.map((c) => (
+              <div key={c.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-bk-bg-light transition-colors">
+                {c.profilePicUrl ? (
+                  <Image src={c.profilePicUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-bk-purple-light flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-bk-text-primary truncate">{c.displayName}</p>
+                  <p className="text-xs text-bk-text-muted truncate">@{c.username}</p>
+                </div>
+                <button
+                  onClick={() => handleAdd(c.id)}
+                  disabled={addingId === c.id}
+                  className="text-xs font-semibold bg-bk-purple text-white px-3 py-1.5 rounded-lg hover:bg-bk-purple-dark transition-colors disabled:opacity-50 flex-shrink-0"
+                >
+                  {addingId === c.id ? "Adding..." : "Add"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddExternalCreatorModal({
+  onContinue,
+  onClose,
+}: {
+  onContinue: (geo: CampaignGeo, stage: CampaignStage) => void;
+  onClose: () => void;
+}) {
+  const [geo, setGeo] = useState<CampaignGeo>("AR");
+  const [stage, setStage] = useState<CampaignStage>("siembra");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-bk-bg rounded-2xl shadow-2xl w-[420px] p-8 space-y-6">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-bk-text-primary">Add External Creator</h2>
+          <p className="text-sm text-bk-text-secondary mt-1">
+            Tag this creator, then paste their Instagram/TikTok on the next step.
+          </p>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Geo</label>
+            <select
+              value={geo}
+              onChange={(e) => setGeo(e.target.value as CampaignGeo)}
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+            >
+              {GEO_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Stage</label>
+            <select
+              value={stage}
+              onChange={(e) => setStage(e.target.value as CampaignStage)}
+              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+            >
+              {STAGE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 border border-bk-border rounded-xl text-sm text-bk-text-secondary hover:bg-bk-bg-light transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={() => onContinue(geo, stage)}
+            className="flex-1 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface CreatorPlatformStat {
+  portfolioId: string;
+  displayName: string;
+  username: string;
+  profilePicUrl: string | null;
+  platform: Platform;
+  geo: CampaignGeo;
+  stage: CampaignStage;
+  avgReach: number;
+  avgRate: number;
+  isEstimated: boolean;
+  postsAnalyzed: number;
+}
+
+function MetricsView() {
+  const [roster, setRoster] = useState<CampaignCreatorSummary[]>([]);
+  const [portfolioData, setPortfolioData] = useState<Record<string, GenerateResponse>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [postsToAnalyze, setPostsToAnalyze] = useState(10);
+  const [organicOnly, setOrganicOnly] = useState(true);
+  const [geoFilter, setGeoFilter] = useState<"all" | CampaignGeo>("all");
+  const [stageFilter, setStageFilter] = useState<"all" | CampaignStage>("all");
+
+  const [showAddInternal, setShowAddInternal] = useState(false);
+  const [savedCreators, setSavedCreators] = useState<PortfolioSummary[]>([]);
+  const [showAddExternalTags, setShowAddExternalTags] = useState(false);
+  const [showAddExternalUrl, setShowAddExternalUrl] = useState(false);
+  const [pendingExternalTags, setPendingExternalTags] = useState<{ geo: CampaignGeo; stage: CampaignStage } | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  const loadRoster = () => {
+    setLoading(true);
+    fetch("/api/metrics/creators")
+      .then(async (res) => {
+        if (!res.ok) throw new Error();
+        return res.json();
+      })
+      .then(async (data) => {
+        const entries: CampaignCreatorSummary[] = data.creators ?? [];
+        setRoster(entries);
+        const pairs = await Promise.all(
+          entries.map(async (c) => {
+            const res = await fetch(`/api/portfolio?id=${c.id}`);
+            const full = await res.json();
+            return [c.id, full] as const;
+          })
+        );
+        setPortfolioData(Object.fromEntries(pairs));
+      })
+      .catch(() => setError("Couldn't load the campaign roster."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadRoster();
+  }, []);
+
+  const openAddInternal = () => {
+    setShowAddInternal(true);
+    fetch("/api/portfolios")
+      .then((res) => res.json())
+      .then((data) => setSavedCreators(data.portfolios ?? []))
+      .catch(() => {});
+  };
+
+  const handleAddInternal = async (portfolioId: string, geo: CampaignGeo, stage: CampaignStage) => {
+    const res = await fetch("/api/metrics/creators", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ portfolioId, geo, stage }),
+    });
+    if (!res.ok) {
+      setError("Couldn't add the creator. Please try again.");
+      return;
+    }
+    loadRoster();
+  };
+
+  const handleAddExternal = async (ig: string, tt: string, yt: string) => {
+    if (!pendingExternalTags) return;
+    setShowAddExternalUrl(false);
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instagramUrl: ig, tiktokUrl: tt, youtubeUrl: yt || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Error generating portfolio");
+        return;
+      }
+      const addRes = await fetch("/api/metrics/creators", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portfolioId: data.id, geo: pendingExternalTags.geo, stage: pendingExternalTags.stage }),
+      });
+      if (!addRes.ok) throw new Error();
+      loadRoster();
+    } catch {
+      setError("Couldn't add the external creator. Please try again.");
+    } finally {
+      setGenerating(false);
+      setPendingExternalTags(null);
+    }
+  };
+
+  const handleRemove = async (portfolioId: string) => {
+    const snapshot = roster;
+    setRoster((prev) => prev.filter((c) => c.id !== portfolioId));
+    try {
+      const res = await fetch("/api/metrics/creators", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ portfolioId }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setRoster(snapshot);
+      setError("Couldn't remove the creator. Please try again.");
+    }
+  };
+
+  const stats: CreatorPlatformStat[] = roster.flatMap((entry) => {
+    const full = portfolioData[entry.id];
+    if (!full) return [];
+    return full.profiles
+      .filter((p) => p.recentPosts.length > 0)
+      .map((profile): CreatorPlatformStat => {
+        const candidatePosts = organicOnly
+          ? profile.recentPosts.filter((p) => isLikelyOrganic(p.caption))
+          : profile.recentPosts;
+        const analyzedPosts = candidatePosts.slice(0, postsToAnalyze);
+        if (analyzedPosts.length === 0) {
+          return {
+            portfolioId: entry.id,
+            displayName: entry.displayName,
+            username: entry.username,
+            profilePicUrl: entry.profilePicUrl,
+            platform: profile.platform,
+            geo: entry.geo,
+            stage: entry.stage,
+            avgReach: 0,
+            avgRate: 0,
+            isEstimated: profile.platform === "instagram",
+            postsAnalyzed: 0,
+          };
+        }
+        const engagements = analyzedPosts.map((post) => computeEngagement(post, profile));
+        const avgReach = engagements.reduce((s, e) => s + e.reach, 0) / engagements.length;
+        const avgRate = engagements.reduce((s, e) => s + e.rate, 0) / engagements.length;
+        const isEstimated = engagements.some((e) => e.isEstimated);
+        return {
+          portfolioId: entry.id,
+          displayName: entry.displayName,
+          username: entry.username,
+          profilePicUrl: entry.profilePicUrl,
+          platform: profile.platform,
+          geo: entry.geo,
+          stage: entry.stage,
+          avgReach,
+          avgRate,
+          isEstimated,
+          postsAnalyzed: analyzedPosts.length,
+        };
+      });
+  });
+
+  const filteredStats = stats.filter(
+    (s) => (geoFilter === "all" || s.geo === geoFilter) && (stageFilter === "all" || s.stage === stageFilter)
+  );
+  const totalReach = filteredStats.reduce((s, x) => s + x.avgReach, 0);
+  const breakdown = GEO_OPTIONS.flatMap(({ value: geo }) =>
+    STAGE_OPTIONS.map(({ value: stage }) => {
+      const cellStats = filteredStats.filter((s) => s.geo === geo && s.stage === stage);
+      return {
+        geo,
+        stage,
+        count: new Set(cellStats.map((s) => s.portfolioId)).size,
+        reach: cellStats.reduce((s, x) => s + x.avgReach, 0),
+      };
+    })
+  );
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="bg-bk-bg border-b border-bk-border px-8 py-5">
+        <h1 className="text-xl font-bold text-bk-text-primary">Metrics</h1>
+        <p className="text-sm text-bk-text-secondary mt-0.5">
+          Estimate total campaign reach across your Internal and External creators.
+        </p>
+      </div>
+
+      {error && (
+        <div className="mx-8 mt-4 flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <X size={14} className="text-red-500" />
+          <p className="text-sm text-red-700">{error}</p>
+          <button onClick={() => setError(null)} className="ml-auto"><X size={14} className="text-red-400" /></button>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-8 space-y-6">
+        {/* Toolbar */}
+        <div className="flex flex-wrap items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-4">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-bk-text-secondary whitespace-nowrap">Posts to analyze</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={postsToAnalyze}
+              onChange={(e) => setPostsToAnalyze(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
+              className="w-16 px-2 py-1.5 rounded-lg border border-bk-border text-sm text-center focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-bk-text-secondary cursor-pointer select-none">
+            <input type="checkbox" checked={organicOnly} onChange={(e) => setOrganicOnly(e.target.checked)} className="accent-bk-purple" />
+            Organic content only
+          </label>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-bk-text-secondary">Geo</label>
+            <select
+              value={geoFilter}
+              onChange={(e) => setGeoFilter(e.target.value as "all" | CampaignGeo)}
+              className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+            >
+              <option value="all">All</option>
+              {GEO_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-bk-text-secondary">Stage</label>
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value as "all" | CampaignStage)}
+              className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+            >
+              <option value="all">All</option>
+              {STAGE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={openAddInternal}
+              className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-3 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors"
+            >
+              <UserSearch size={14} /> Internal Creators
+            </button>
+            <button
+              onClick={() => setShowAddExternalTags(true)}
+              disabled={generating}
+              className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-3 py-2 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
+            >
+              <span>✦</span> {generating ? "Generating..." : "External Creators"}
+            </button>
+          </div>
+        </div>
+
+        {/* Summary */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-1 rounded-xl p-5 space-y-1" style={{ background: "var(--gradient-brand)" }}>
+            <p className="text-xs font-semibold text-white/80 uppercase tracking-wider">Total Potential Reach</p>
+            <p className="text-3xl font-bold text-white">{fmt(Math.round(totalReach))}</p>
+            <p className="text-[11px] text-white/70">Sum of each creator&apos;s avg. reach per video</p>
+          </div>
+          <div className="col-span-2 bg-bk-bg border border-bk-border rounded-xl p-4">
+            <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-3">Breakdown by Geo &amp; Stage</p>
+            <div className="grid grid-cols-4 gap-3">
+              {breakdown.map((cell) => (
+                <div key={`${cell.geo}-${cell.stage}`} className="bg-bk-bg-light rounded-lg p-3">
+                  <p className="text-[10px] font-semibold text-bk-text-muted uppercase">{cell.geo} · {cell.stage}</p>
+                  <p className="text-lg font-bold text-bk-text-primary">{fmt(Math.round(cell.reach))}</p>
+                  <p className="text-[11px] text-bk-text-muted">{cell.count} creator{cell.count === 1 ? "" : "s"}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Roster table */}
+        <div className="bg-bk-bg border border-bk-border rounded-xl overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 size={24} className="text-bk-purple animate-spin" />
+            </div>
+          ) : filteredStats.length === 0 ? (
+            <p className="text-sm text-bk-text-muted text-center py-12">
+              {roster.length === 0
+                ? "No creators in this campaign yet. Add one from Internal or External Creators above."
+                : "No creators match the current Geo/Stage filters."}
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-bk-border text-left text-xs font-semibold text-bk-text-muted uppercase tracking-wider">
+                  <th className="px-4 py-3">Creator</th>
+                  <th className="px-4 py-3">Geo</th>
+                  <th className="px-4 py-3">Stage</th>
+                  <th className="px-4 py-3">Avg. Reach/Video</th>
+                  <th className="px-4 py-3">Avg. ER</th>
+                  <th className="px-4 py-3">Posts analyzed</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStats.map((s) => (
+                  <tr key={`${s.portfolioId}-${s.platform}`} className="border-b border-bk-border-light last:border-0">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        {s.profilePicUrl ? (
+                          <Image src={s.profilePicUrl} alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-bk-purple-light flex-shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium text-bk-text-primary truncate">{s.displayName}</p>
+                          <p className="text-xs text-bk-text-muted truncate">@{s.username} · {s.platform === "instagram" ? "Instagram" : "TikTok"}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-bk-text-secondary">{s.geo}</td>
+                    <td className="px-4 py-3 text-bk-text-secondary capitalize">{s.stage}</td>
+                    <td className="px-4 py-3 font-semibold text-bk-text-primary">
+                      {fmt(Math.round(s.avgReach))}{s.isEstimated ? "~" : ""}
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-bk-purple">{s.avgRate.toFixed(2)}%</td>
+                    <td className="px-4 py-3 text-bk-text-muted">{s.postsAnalyzed}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => handleRemove(s.portfolioId)}
+                        className="text-bk-text-muted hover:text-red-600 transition-colors"
+                        title="Remove from campaign"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {showAddInternal && (
+        <AddInternalCreatorModal
+          savedCreators={savedCreators}
+          existingIds={new Set(roster.map((c) => c.id))}
+          onAdd={handleAddInternal}
+          onClose={() => setShowAddInternal(false)}
+        />
+      )}
+
+      {showAddExternalTags && (
+        <AddExternalCreatorModal
+          onContinue={(geo, stage) => {
+            setPendingExternalTags({ geo, stage });
+            setShowAddExternalTags(false);
+            setShowAddExternalUrl(true);
+          }}
+          onClose={() => setShowAddExternalTags(false)}
+        />
+      )}
+
+      {showAddExternalUrl && (
+        <URLModal onClose={() => { setShowAddExternalUrl(false); setPendingExternalTags(null); }} onSubmit={handleAddExternal} />
+      )}
     </div>
   );
 }
@@ -2873,6 +3469,8 @@ export default function Home() {
 
       {mainView === "portfolio" ? (
         <OwnPortfolioView />
+      ) : mainView === "metrics" ? (
+        <MetricsView />
       ) : creatorsView === "list" ? (
         <div className="flex flex-1 flex-col overflow-hidden">
           {successMessage && (
