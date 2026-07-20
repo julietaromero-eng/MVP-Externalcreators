@@ -1995,7 +1995,7 @@ function CountrySelect({
   );
 }
 
-function AddInternalCreatorModal({
+function AddCreatorModal({
   savedCreators,
   existingIds,
   onAdd,
@@ -2034,7 +2034,7 @@ function AddInternalCreatorModal({
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-bk-bg rounded-2xl shadow-2xl w-[520px] max-h-[80vh] flex flex-col p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-bk-text-primary">Add Internal Creator</h2>
+          <h2 className="text-lg font-bold text-bk-text-primary">Add Creator</h2>
           <button onClick={onClose} className="text-bk-text-muted hover:text-bk-text-primary"><X size={18} /></button>
         </div>
 
@@ -2082,45 +2082,6 @@ function AddInternalCreatorModal({
               </div>
             ))
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AddExternalCreatorModal({
-  onContinue,
-  onClose,
-}: {
-  onContinue: (geo: CampaignGeo) => void;
-  onClose: () => void;
-}) {
-  const [geo, setGeo] = useState<CampaignGeo>("AR");
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-bk-bg rounded-2xl shadow-2xl w-[420px] p-8 space-y-6">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-bk-text-primary">Add External Creator</h2>
-          <p className="text-sm text-bk-text-secondary mt-1">
-            Tag this creator, then paste their Instagram/TikTok on the next step.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Geo</label>
-          <CountrySelect value={geo} onChange={setGeo} className="w-full" />
-        </div>
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 border border-bk-border rounded-xl text-sm text-bk-text-secondary hover:bg-bk-bg-light transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={() => onContinue(geo)}
-            className="flex-1 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
-          >
-            Continue
-          </button>
         </div>
       </div>
     </div>
@@ -2207,12 +2168,8 @@ function MetricsView() {
   const [excludePinned, setExcludePinned] = useState(true);
   const [geoFilter, setGeoFilter] = useState<CampaignGeo | "">("");
 
-  const [showAddInternal, setShowAddInternal] = useState(false);
+  const [showAddCreator, setShowAddCreator] = useState(false);
   const [savedCreators, setSavedCreators] = useState<PortfolioSummary[]>([]);
-  const [showAddExternalTags, setShowAddExternalTags] = useState(false);
-  const [showAddExternalUrl, setShowAddExternalUrl] = useState(false);
-  const [pendingExternalGeo, setPendingExternalGeo] = useState<CampaignGeo | null>(null);
-  const [generating, setGenerating] = useState(false);
 
   const loadRoster = () => {
     setLoading(true);
@@ -2241,15 +2198,15 @@ function MetricsView() {
     loadRoster();
   }, []);
 
-  const openAddInternal = () => {
-    setShowAddInternal(true);
+  const openAddCreator = () => {
+    setShowAddCreator(true);
     fetch("/api/portfolios")
       .then((res) => res.json())
       .then((data) => setSavedCreators(data.portfolios ?? []))
       .catch(() => {});
   };
 
-  const handleAddInternal = async (portfolioId: string, geo: CampaignGeo) => {
+  const handleAddCreator = async (portfolioId: string, geo: CampaignGeo) => {
     const res = await fetch("/api/metrics/creators", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2260,37 +2217,6 @@ function MetricsView() {
       return;
     }
     loadRoster();
-  };
-
-  const handleAddExternal = async (ig: string, tt: string, yt: string) => {
-    if (!pendingExternalGeo) return;
-    setShowAddExternalUrl(false);
-    setGenerating(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ instagramUrl: ig, tiktokUrl: tt, youtubeUrl: yt || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Error generating portfolio");
-        return;
-      }
-      const addRes = await fetch("/api/metrics/creators", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ portfolioId: data.id, geo: pendingExternalGeo }),
-      });
-      if (!addRes.ok) throw new Error();
-      loadRoster();
-    } catch {
-      setError("Couldn't add the external creator. Please try again.");
-    } finally {
-      setGenerating(false);
-      setPendingExternalGeo(null);
-    }
   };
 
   const handleRemove = async (portfolioId: string) => {
@@ -2392,7 +2318,7 @@ function MetricsView() {
       <div className="bg-bk-bg border-b border-bk-border px-8 py-5">
         <h1 className="text-xl font-bold text-bk-text-primary">Metrics</h1>
         <p className="text-sm text-bk-text-secondary mt-0.5">
-          Estimate total campaign reach across your Internal and External creators.
+          Estimate total campaign reach across your saved creators.
         </p>
       </div>
 
@@ -2437,17 +2363,10 @@ function MetricsView() {
               <Archive size={14} /> Export
             </button>
             <button
-              onClick={openAddInternal}
-              className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-3 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors"
+              onClick={openAddCreator}
+              className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-3 py-2 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
             >
-              <UserSearch size={14} /> Internal Creators
-            </button>
-            <button
-              onClick={() => setShowAddExternalTags(true)}
-              disabled={generating}
-              className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-3 py-2 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
-            >
-              <span>✦</span> {generating ? "Generating..." : "External Creators"}
+              <UserSearch size={14} /> Add Creator
             </button>
           </div>
         </div>
@@ -2488,7 +2407,7 @@ function MetricsView() {
           ) : filteredStats.length === 0 ? (
             <p className="text-sm text-bk-text-muted text-center py-12">
               {roster.length === 0
-                ? "No creators in this campaign yet. Add one from Internal or External Creators above."
+                ? "No creators in this campaign yet. Add one above."
                 : "No creators match the current Geo filter."}
             </p>
           ) : (
@@ -2542,28 +2461,13 @@ function MetricsView() {
         </div>
       </div>
 
-      {showAddInternal && (
-        <AddInternalCreatorModal
+      {showAddCreator && (
+        <AddCreatorModal
           savedCreators={savedCreators}
           existingIds={new Set(roster.map((c) => c.id))}
-          onAdd={handleAddInternal}
-          onClose={() => setShowAddInternal(false)}
+          onAdd={handleAddCreator}
+          onClose={() => setShowAddCreator(false)}
         />
-      )}
-
-      {showAddExternalTags && (
-        <AddExternalCreatorModal
-          onContinue={(geo) => {
-            setPendingExternalGeo(geo);
-            setShowAddExternalTags(false);
-            setShowAddExternalUrl(true);
-          }}
-          onClose={() => setShowAddExternalTags(false)}
-        />
-      )}
-
-      {showAddExternalUrl && (
-        <URLModal onClose={() => { setShowAddExternalUrl(false); setPendingExternalGeo(null); }} onSubmit={handleAddExternal} />
       )}
     </div>
   );
