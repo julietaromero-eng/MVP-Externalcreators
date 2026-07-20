@@ -38,6 +38,7 @@ export function normalizeInstagram(raw: RawData): CreatorProfile {
       isVideo,
       videoUrl,
       caption: (captionObj?.text as string) ?? "",
+      isPinned: Boolean(p.is_pinned),
     };
   });
 
@@ -84,6 +85,7 @@ export function normalizeTikTok(raw: RawData): CreatorProfile {
       viewsCount: stats.playCount ?? 0,
       isVideo: true,
       caption: (v.desc as string) ?? "",
+      isPinned: Boolean(v.isPinned),
     };
   });
 

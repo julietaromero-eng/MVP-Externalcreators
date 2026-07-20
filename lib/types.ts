@@ -13,6 +13,7 @@ export interface CreatorPost {
   videoUrl?: string | null;
   caption: string;
   sortOrder?: number;
+  isPinned?: boolean;
 }
 
 export interface CreatorProfile {
@@ -94,10 +95,9 @@ export interface PortfolioSummary {
   generatedAt: string | null;
 }
 
-export type CampaignGeo = "AR" | "CL";
-export type CampaignStage = "siembra" | "amplificacion";
+// ISO 3166-1 alpha-2 country code.
+export type CampaignGeo = string;
 
 export interface CampaignCreatorSummary extends PortfolioSummary {
   geo: CampaignGeo;
-  stage: CampaignStage;
 }

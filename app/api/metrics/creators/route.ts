@@ -1,5 +1,5 @@
 import { addCampaignCreator, listCampaignCreators, removeCampaignCreator } from "@/lib/portfolio-store";
-import type { CampaignGeo, CampaignStage } from "@/lib/types";
+import type { CampaignGeo } from "@/lib/types";
 
 export async function GET() {
   try {
@@ -13,15 +13,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { portfolioId, geo, stage } = (await request.json()) as {
+    const { portfolioId, geo } = (await request.json()) as {
       portfolioId: string;
       geo: CampaignGeo;
-      stage: CampaignStage;
     };
-    if (!portfolioId || !geo || !stage) {
-      return Response.json({ error: "portfolioId, geo, and stage are required" }, { status: 400 });
+    if (!portfolioId || !geo) {
+      return Response.json({ error: "portfolioId and geo are required" }, { status: 400 });
     }
-    await addCampaignCreator(portfolioId, geo, stage);
+    await addCampaignCreator(portfolioId, geo);
     return Response.json({ ok: true });
   } catch (error) {
     console.error("Add campaign creator error:", error);

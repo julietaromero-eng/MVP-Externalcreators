@@ -14,7 +14,8 @@ import {
 } from "react-icons/fa6";
 import { BrkawayLogo } from "@/lib/BrkawayLogo";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary, CampaignCreatorSummary, CampaignGeo, CampaignStage } from "@/lib/types";
+import { COUNTRIES, COUNTRY_BY_CODE } from "@/lib/countries";
+import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary, CampaignCreatorSummary, CampaignGeo } from "@/lib/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1912,46 +1913,84 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 
-const GEO_OPTIONS: { value: CampaignGeo; label: string }[] = [
-  { value: "AR", label: "Argentina (AR)" },
-  { value: "CL", label: "Chile (CL)" },
-];
-const STAGE_OPTIONS: { value: CampaignStage; label: string }[] = [
-  { value: "siembra", label: "Siembra" },
-  { value: "amplificacion", label: "Amplificación" },
-];
-
-function GeoStageSelects({
-  geo,
-  stage,
-  onGeoChange,
-  onStageChange,
+function CountrySelect({
+  value,
+  onChange,
+  allowAll = false,
+  className = "",
 }: {
-  geo: CampaignGeo;
-  stage: CampaignStage;
-  onGeoChange: (geo: CampaignGeo) => void;
-  onStageChange: (stage: CampaignStage) => void;
+  value: CampaignGeo | "";
+  onChange: (code: string) => void;
+  allowAll?: boolean;
+  className?: string;
 }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLabel = value === "" ? "All countries" : (COUNTRY_BY_CODE.get(value)?.name ?? value);
+
+  const normalizedQuery = normalizeSearch(query);
+  const filtered = normalizedQuery
+    ? COUNTRIES.filter(
+        (c) => normalizeSearch(c.name).includes(normalizedQuery) || c.code.toLowerCase().includes(normalizedQuery)
+      ).slice(0, 8)
+    : COUNTRIES.slice(0, 8);
+
+  const handleSelect = (code: string) => {
+    onChange(code);
+    setQuery("");
+    setOpen(false);
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      <select
-        value={geo}
-        onChange={(e) => onGeoChange(e.target.value as CampaignGeo)}
-        className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-      >
-        {GEO_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
-      <select
-        value={stage}
-        onChange={(e) => onStageChange(e.target.value as CampaignStage)}
-        className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-      >
-        {STAGE_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
+    <div className={`relative ${className}`} ref={containerRef}>
+      <input
+        value={open ? query : selectedLabel}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          setQuery("");
+          setOpen(true);
+        }}
+        placeholder="Search country..."
+        className="w-full px-2.5 py-1.5 rounded-lg border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+      />
+      {open && (
+        <div className="absolute z-20 top-full left-0 mt-1 w-56 max-h-64 overflow-y-auto bg-bk-bg border border-bk-border rounded-xl shadow-lg py-1">
+          {allowAll && (
+            <button
+              onClick={() => handleSelect("")}
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-bk-bg-light transition-colors text-bk-text-primary"
+            >
+              All countries
+            </button>
+          )}
+          {filtered.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-bk-text-muted">No matches</p>
+          ) : (
+            filtered.map((c) => (
+              <button
+                key={c.code}
+                onClick={() => handleSelect(c.code)}
+                className="w-full text-left px-3 py-1.5 text-sm hover:bg-bk-bg-light transition-colors text-bk-text-primary"
+              >
+                {c.name} <span className="text-bk-text-muted">({c.code})</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1964,12 +2003,11 @@ function AddInternalCreatorModal({
 }: {
   savedCreators: PortfolioSummary[];
   existingIds: Set<string>;
-  onAdd: (portfolioId: string, geo: CampaignGeo, stage: CampaignStage) => Promise<void>;
+  onAdd: (portfolioId: string, geo: CampaignGeo) => Promise<void>;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [geo, setGeo] = useState<CampaignGeo>("AR");
-  const [stage, setStage] = useState<CampaignStage>("siembra");
   const [addingId, setAddingId] = useState<string | null>(null);
 
   const normalizedSearch = normalizeSearch(search);
@@ -1985,7 +2023,7 @@ function AddInternalCreatorModal({
   const handleAdd = async (id: string) => {
     setAddingId(id);
     try {
-      await onAdd(id, geo, stage);
+      await onAdd(id, geo);
     } finally {
       setAddingId(null);
     }
@@ -2014,7 +2052,7 @@ function AddInternalCreatorModal({
 
         <div className="flex items-center justify-between gap-3 bg-bk-bg-light rounded-xl px-3 py-2.5">
           <span className="text-xs font-medium text-bk-text-secondary">Tag new adds as:</span>
-          <GeoStageSelects geo={geo} stage={stage} onGeoChange={setGeo} onStageChange={setStage} />
+          <CountrySelect value={geo} onChange={setGeo} className="w-56" />
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-1.5 -mx-2 px-2">
@@ -2054,11 +2092,10 @@ function AddExternalCreatorModal({
   onContinue,
   onClose,
 }: {
-  onContinue: (geo: CampaignGeo, stage: CampaignStage) => void;
+  onContinue: (geo: CampaignGeo) => void;
   onClose: () => void;
 }) {
   const [geo, setGeo] = useState<CampaignGeo>("AR");
-  const [stage, setStage] = useState<CampaignStage>("siembra");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -2070,44 +2107,78 @@ function AddExternalCreatorModal({
             Tag this creator, then paste their Instagram/TikTok on the next step.
           </p>
         </div>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Geo</label>
-            <select
-              value={geo}
-              onChange={(e) => setGeo(e.target.value as CampaignGeo)}
-              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-            >
-              {GEO_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Stage</label>
-            <select
-              value={stage}
-              onChange={(e) => setStage(e.target.value as CampaignStage)}
-              className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-            >
-              {STAGE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-bk-text-primary mb-1.5">Geo</label>
+          <CountrySelect value={geo} onChange={setGeo} className="w-full" />
         </div>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 border border-bk-border rounded-xl text-sm text-bk-text-secondary hover:bg-bk-bg-light transition-colors">
             Cancel
           </button>
           <button
-            onClick={() => onContinue(geo, stage)}
+            onClick={() => onContinue(geo)}
             className="flex-1 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
           >
             Continue
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function FiltersMenu({
+  organicOnly,
+  onOrganicOnlyChange,
+  excludePinned,
+  onExcludePinnedChange,
+}: {
+  organicOnly: boolean;
+  onOrganicOnlyChange: (v: boolean) => void;
+  excludePinned: boolean;
+  onExcludePinnedChange: (v: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-3 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors"
+      >
+        <SlidersHorizontal size={14} /> Filters
+      </button>
+      {open && (
+        <div className="absolute z-20 top-full left-0 mt-1 w-64 bg-bk-bg border border-bk-border rounded-xl shadow-lg p-3 space-y-1">
+          <label className="flex items-center justify-between gap-2 px-1 py-2 text-sm text-bk-text-primary cursor-pointer select-none">
+            <span>Organic content only</span>
+            <input
+              type="checkbox"
+              checked={organicOnly}
+              onChange={(e) => onOrganicOnlyChange(e.target.checked)}
+              className="accent-bk-purple"
+            />
+          </label>
+          <label className="flex items-center justify-between gap-2 px-1 py-2 text-sm text-bk-text-primary cursor-pointer select-none">
+            <span>Exclude pinned posts</span>
+            <input
+              type="checkbox"
+              checked={excludePinned}
+              onChange={(e) => onExcludePinnedChange(e.target.checked)}
+              className="accent-bk-purple"
+            />
+          </label>
+        </div>
+      )}
     </div>
   );
 }
@@ -2119,7 +2190,6 @@ interface CreatorPlatformStat {
   profilePicUrl: string | null;
   platform: Platform;
   geo: CampaignGeo;
-  stage: CampaignStage;
   avgReach: number;
   avgRate: number;
   isEstimated: boolean;
@@ -2134,14 +2204,14 @@ function MetricsView() {
 
   const [postsToAnalyze, setPostsToAnalyze] = useState(10);
   const [organicOnly, setOrganicOnly] = useState(true);
-  const [geoFilter, setGeoFilter] = useState<"all" | CampaignGeo>("all");
-  const [stageFilter, setStageFilter] = useState<"all" | CampaignStage>("all");
+  const [excludePinned, setExcludePinned] = useState(true);
+  const [geoFilter, setGeoFilter] = useState<CampaignGeo | "">("");
 
   const [showAddInternal, setShowAddInternal] = useState(false);
   const [savedCreators, setSavedCreators] = useState<PortfolioSummary[]>([]);
   const [showAddExternalTags, setShowAddExternalTags] = useState(false);
   const [showAddExternalUrl, setShowAddExternalUrl] = useState(false);
-  const [pendingExternalTags, setPendingExternalTags] = useState<{ geo: CampaignGeo; stage: CampaignStage } | null>(null);
+  const [pendingExternalGeo, setPendingExternalGeo] = useState<CampaignGeo | null>(null);
   const [generating, setGenerating] = useState(false);
 
   const loadRoster = () => {
@@ -2179,11 +2249,11 @@ function MetricsView() {
       .catch(() => {});
   };
 
-  const handleAddInternal = async (portfolioId: string, geo: CampaignGeo, stage: CampaignStage) => {
+  const handleAddInternal = async (portfolioId: string, geo: CampaignGeo) => {
     const res = await fetch("/api/metrics/creators", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ portfolioId, geo, stage }),
+      body: JSON.stringify({ portfolioId, geo }),
     });
     if (!res.ok) {
       setError("Couldn't add the creator. Please try again.");
@@ -2193,7 +2263,7 @@ function MetricsView() {
   };
 
   const handleAddExternal = async (ig: string, tt: string, yt: string) => {
-    if (!pendingExternalTags) return;
+    if (!pendingExternalGeo) return;
     setShowAddExternalUrl(false);
     setGenerating(true);
     setError(null);
@@ -2211,7 +2281,7 @@ function MetricsView() {
       const addRes = await fetch("/api/metrics/creators", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ portfolioId: data.id, geo: pendingExternalTags.geo, stage: pendingExternalTags.stage }),
+        body: JSON.stringify({ portfolioId: data.id, geo: pendingExternalGeo }),
       });
       if (!addRes.ok) throw new Error();
       loadRoster();
@@ -2219,7 +2289,7 @@ function MetricsView() {
       setError("Couldn't add the external creator. Please try again.");
     } finally {
       setGenerating(false);
-      setPendingExternalTags(null);
+      setPendingExternalGeo(null);
     }
   };
 
@@ -2245,9 +2315,8 @@ function MetricsView() {
     return full.profiles
       .filter((p) => p.recentPosts.length > 0)
       .map((profile): CreatorPlatformStat => {
-        const candidatePosts = organicOnly
-          ? profile.recentPosts.filter((p) => isLikelyOrganic(p.caption))
-          : profile.recentPosts;
+        const basePosts = excludePinned ? profile.recentPosts.filter((p) => !p.isPinned) : profile.recentPosts;
+        const candidatePosts = organicOnly ? basePosts.filter((p) => isLikelyOrganic(p.caption)) : basePosts;
         const analyzedPosts = candidatePosts.slice(0, postsToAnalyze);
         if (analyzedPosts.length === 0) {
           return {
@@ -2257,7 +2326,6 @@ function MetricsView() {
             profilePicUrl: entry.profilePicUrl,
             platform: profile.platform,
             geo: entry.geo,
-            stage: entry.stage,
             avgReach: 0,
             avgRate: 0,
             isEstimated: profile.platform === "instagram",
@@ -2275,7 +2343,6 @@ function MetricsView() {
           profilePicUrl: entry.profilePicUrl,
           platform: profile.platform,
           geo: entry.geo,
-          stage: entry.stage,
           avgReach,
           avgRate,
           isEstimated,
@@ -2284,21 +2351,41 @@ function MetricsView() {
       });
   });
 
-  const filteredStats = stats.filter(
-    (s) => (geoFilter === "all" || s.geo === geoFilter) && (stageFilter === "all" || s.stage === stageFilter)
-  );
+  const filteredStats = stats.filter((s) => geoFilter === "" || s.geo === geoFilter);
   const totalReach = filteredStats.reduce((s, x) => s + x.avgReach, 0);
-  const breakdown = GEO_OPTIONS.flatMap(({ value: geo }) =>
-    STAGE_OPTIONS.map(({ value: stage }) => {
-      const cellStats = filteredStats.filter((s) => s.geo === geo && s.stage === stage);
-      return {
-        geo,
-        stage,
-        count: new Set(cellStats.map((s) => s.portfolioId)).size,
-        reach: cellStats.reduce((s, x) => s + x.avgReach, 0),
-      };
-    })
-  );
+  const distinctGeos = Array.from(new Set(filteredStats.map((s) => s.geo))).sort();
+  const breakdown = distinctGeos.map((geo) => {
+    const cellStats = filteredStats.filter((s) => s.geo === geo);
+    return {
+      geo,
+      count: new Set(cellStats.map((s) => s.portfolioId)).size,
+      reach: cellStats.reduce((s, x) => s + x.avgReach, 0),
+    };
+  });
+
+  const handleExport = () => {
+    const headers = ["Creator", "Username", "Platform", "Geo", "Avg Reach/Video", "Avg ER (%)", "Posts analyzed"];
+    const rows = filteredStats.map((s) => [
+      s.displayName,
+      s.username,
+      s.platform,
+      COUNTRY_BY_CODE.get(s.geo)?.name ?? s.geo,
+      Math.round(s.avgReach).toString(),
+      s.avgRate.toFixed(2),
+      s.postsAnalyzed.toString(),
+    ]);
+    rows.push(["", "", "", "Total Potential Reach", Math.round(totalReach).toString(), "", ""]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "brkaway-metrics.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -2331,38 +2418,24 @@ function MetricsView() {
               className="w-16 px-2 py-1.5 rounded-lg border border-bk-border text-sm text-center focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
             />
           </div>
-          <label className="flex items-center gap-2 text-xs font-semibold text-bk-text-secondary cursor-pointer select-none">
-            <input type="checkbox" checked={organicOnly} onChange={(e) => setOrganicOnly(e.target.checked)} className="accent-bk-purple" />
-            Organic content only
-          </label>
           <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-bk-text-secondary">Geo</label>
-            <select
-              value={geoFilter}
-              onChange={(e) => setGeoFilter(e.target.value as "all" | CampaignGeo)}
-              className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-            >
-              <option value="all">All</option>
-              {GEO_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+            <label className="text-xs font-semibold text-bk-text-secondary whitespace-nowrap">Geo</label>
+            <CountrySelect value={geoFilter} onChange={setGeoFilter} allowAll className="w-48" />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-bk-text-secondary">Stage</label>
-            <select
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value as "all" | CampaignStage)}
-              className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-            >
-              <option value="all">All</option>
-              {STAGE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
+          <FiltersMenu
+            organicOnly={organicOnly}
+            onOrganicOnlyChange={setOrganicOnly}
+            excludePinned={excludePinned}
+            onExcludePinnedChange={setExcludePinned}
+          />
 
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-3 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors"
+            >
+              <Archive size={14} /> Export
+            </button>
             <button
               onClick={openAddInternal}
               className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-3 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors"
@@ -2387,16 +2460,22 @@ function MetricsView() {
             <p className="text-[11px] text-white/70">Sum of each creator&apos;s avg. reach per video</p>
           </div>
           <div className="col-span-2 bg-bk-bg border border-bk-border rounded-xl p-4">
-            <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-3">Breakdown by Geo &amp; Stage</p>
-            <div className="grid grid-cols-4 gap-3">
-              {breakdown.map((cell) => (
-                <div key={`${cell.geo}-${cell.stage}`} className="bg-bk-bg-light rounded-lg p-3">
-                  <p className="text-[10px] font-semibold text-bk-text-muted uppercase">{cell.geo} · {cell.stage}</p>
-                  <p className="text-lg font-bold text-bk-text-primary">{fmt(Math.round(cell.reach))}</p>
-                  <p className="text-[11px] text-bk-text-muted">{cell.count} creator{cell.count === 1 ? "" : "s"}</p>
-                </div>
-              ))}
-            </div>
+            <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-3">Breakdown by Geo</p>
+            {breakdown.length === 0 ? (
+              <p className="text-sm text-bk-text-muted">No creators to break down yet.</p>
+            ) : (
+              <div className="grid grid-cols-4 gap-3">
+                {breakdown.map((cell) => (
+                  <div key={cell.geo} className="bg-bk-bg-light rounded-lg p-3">
+                    <p className="text-[10px] font-semibold text-bk-text-muted uppercase">
+                      {COUNTRY_BY_CODE.get(cell.geo)?.name ?? cell.geo}
+                    </p>
+                    <p className="text-lg font-bold text-bk-text-primary">{fmt(Math.round(cell.reach))}</p>
+                    <p className="text-[11px] text-bk-text-muted">{cell.count} creator{cell.count === 1 ? "" : "s"}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -2410,7 +2489,7 @@ function MetricsView() {
             <p className="text-sm text-bk-text-muted text-center py-12">
               {roster.length === 0
                 ? "No creators in this campaign yet. Add one from Internal or External Creators above."
-                : "No creators match the current Geo/Stage filters."}
+                : "No creators match the current Geo filter."}
             </p>
           ) : (
             <table className="w-full text-sm">
@@ -2418,7 +2497,6 @@ function MetricsView() {
                 <tr className="border-b border-bk-border text-left text-xs font-semibold text-bk-text-muted uppercase tracking-wider">
                   <th className="px-4 py-3">Creator</th>
                   <th className="px-4 py-3">Geo</th>
-                  <th className="px-4 py-3">Stage</th>
                   <th className="px-4 py-3">Avg. Reach/Video</th>
                   <th className="px-4 py-3">Avg. ER</th>
                   <th className="px-4 py-3">Posts analyzed</th>
@@ -2441,8 +2519,7 @@ function MetricsView() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-bk-text-secondary">{s.geo}</td>
-                    <td className="px-4 py-3 text-bk-text-secondary capitalize">{s.stage}</td>
+                    <td className="px-4 py-3 text-bk-text-secondary">{COUNTRY_BY_CODE.get(s.geo)?.name ?? s.geo}</td>
                     <td className="px-4 py-3 font-semibold text-bk-text-primary">
                       {fmt(Math.round(s.avgReach))}{s.isEstimated ? "~" : ""}
                     </td>
@@ -2476,8 +2553,8 @@ function MetricsView() {
 
       {showAddExternalTags && (
         <AddExternalCreatorModal
-          onContinue={(geo, stage) => {
-            setPendingExternalTags({ geo, stage });
+          onContinue={(geo) => {
+            setPendingExternalGeo(geo);
             setShowAddExternalTags(false);
             setShowAddExternalUrl(true);
           }}
@@ -2486,7 +2563,7 @@ function MetricsView() {
       )}
 
       {showAddExternalUrl && (
-        <URLModal onClose={() => { setShowAddExternalUrl(false); setPendingExternalTags(null); }} onSubmit={handleAddExternal} />
+        <URLModal onClose={() => { setShowAddExternalUrl(false); setPendingExternalGeo(null); }} onSubmit={handleAddExternal} />
       )}
     </div>
   );

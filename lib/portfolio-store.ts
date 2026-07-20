@@ -4,7 +4,6 @@ import type {
   BookingLinks,
   CampaignCreatorSummary,
   CampaignGeo,
-  CampaignStage,
   CreatorPost,
   CreatorProfile,
   Platform,
@@ -99,6 +98,7 @@ function postRowToCreatorPost(row: Record<string, unknown>): CreatorPost {
     videoUrl: (row.video_url as string) ?? null,
     caption: (row.caption as string) ?? "",
     sortOrder: (row.sort_order as number) ?? 0,
+    isPinned: (row.is_pinned as boolean) ?? false,
   };
 }
 
@@ -207,6 +207,7 @@ export async function saveGeneratedPortfolio(
           is_video: post.isVideo ?? false,
           video_url: post.videoUrl ?? null,
           sort_order: index,
+          is_pinned: post.isPinned ?? false,
         }))
       );
       if (postsError) throw postsError;
@@ -560,15 +561,11 @@ export async function replacePostMedia(
   return postRowToCreatorPost(data);
 }
 
-export async function addCampaignCreator(
-  portfolioId: string,
-  geo: CampaignGeo,
-  stage: CampaignStage
-): Promise<void> {
+export async function addCampaignCreator(portfolioId: string, geo: CampaignGeo): Promise<void> {
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("campaign_creators")
-    .upsert({ portfolio_id: portfolioId, geo, stage }, { onConflict: "portfolio_id" });
+    .upsert({ portfolio_id: portfolioId, geo }, { onConflict: "portfolio_id" });
   if (error) throw error;
 }
 
@@ -583,7 +580,7 @@ export async function listCampaignCreators(): Promise<CampaignCreatorSummary[]> 
 
   const { data: rosterRows, error: rosterError } = await supabase
     .from("campaign_creators")
-    .select("portfolio_id, geo, stage")
+    .select("portfolio_id, geo")
     .order("added_at", { ascending: true });
   if (rosterError) throw rosterError;
   if (!rosterRows || rosterRows.length === 0) return [];
@@ -629,7 +626,6 @@ export async function listCampaignCreators(): Promise<CampaignCreatorSummary[]> 
         platforms: profiles.map((p) => p.platform as Platform),
         generatedAt: (portfolio.generated_at as string) ?? null,
         geo: roster.geo as CampaignGeo,
-        stage: roster.stage as CampaignStage,
       };
     })
     .filter((x): x is CampaignCreatorSummary => x !== null);
