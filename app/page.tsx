@@ -2167,6 +2167,7 @@ function MetricsView() {
   const [organicOnly, setOrganicOnly] = useState(true);
   const [excludePinned, setExcludePinned] = useState(true);
   const [geoFilter, setGeoFilter] = useState<CampaignGeo | "">("");
+  const [platformFilter, setPlatformFilter] = useState<"all" | Platform>("all");
 
   const [showAddCreator, setShowAddCreator] = useState(false);
   const [savedCreators, setSavedCreators] = useState<PortfolioSummary[]>([]);
@@ -2240,8 +2241,11 @@ function MetricsView() {
     if (!full) return [];
     return full.profiles
       .filter((p) => p.recentPosts.length > 0)
+      .filter((p) => platformFilter === "all" || p.platform === platformFilter)
       .map((profile): CreatorPlatformStat => {
-        const basePosts = excludePinned ? profile.recentPosts.filter((p) => !p.isPinned) : profile.recentPosts;
+        const reelsOnly = platformFilter === "instagram";
+        const pinnedFiltered = excludePinned ? profile.recentPosts.filter((p) => !p.isPinned) : profile.recentPosts;
+        const basePosts = reelsOnly ? pinnedFiltered.filter((p) => p.isVideo) : pinnedFiltered;
         const candidatePosts = organicOnly ? basePosts.filter((p) => isLikelyOrganic(p.caption)) : basePosts;
         const analyzedPosts = candidatePosts.slice(0, postsToAnalyze);
         if (analyzedPosts.length === 0) {
@@ -2347,6 +2351,19 @@ function MetricsView() {
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-bk-text-secondary whitespace-nowrap">Geo</label>
             <CountrySelect value={geoFilter} onChange={setGeoFilter} allowAll className="w-48" />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-bk-text-secondary whitespace-nowrap">Platform</label>
+            <select
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value as "all" | Platform)}
+              className="px-2.5 py-1.5 rounded-lg border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+            >
+              <option value="all">All platforms</option>
+              <option value="instagram">Instagram Reels</option>
+              <option value="tiktok">TikTok</option>
+              <option value="youtube">YouTube</option>
+            </select>
           </div>
           <FiltersMenu
             organicOnly={organicOnly}
