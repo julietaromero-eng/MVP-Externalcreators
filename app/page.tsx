@@ -810,6 +810,67 @@ function sortPosts<T extends { post: CreatorPost }>(items: T[], sortBy: SortKey)
   return sorted;
 }
 
+function AddTikTokModal({
+  onClose,
+  onSubmit,
+}: {
+  onClose: () => void;
+  onSubmit: (url: string) => Promise<void>;
+}) {
+  const [url, setUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!url.trim()) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(url.trim());
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-bk-bg rounded-2xl shadow-2xl w-[420px] p-8 space-y-6">
+        <div className="text-center">
+          <h2 className="text-xl font-bold text-bk-text-primary flex items-center justify-center gap-2">
+            <FaTiktok /> Add TikTok
+          </h2>
+          <p className="text-sm text-bk-text-secondary mt-1">
+            Paste the TikTok URL or @username. This won&apos;t touch the existing Instagram profile.
+          </p>
+        </div>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+          placeholder="https://www.tiktok.com/@username"
+          autoFocus
+          className="w-full px-4 py-2.5 rounded-xl border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
+        />
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 border border-bk-border rounded-xl text-sm text-bk-text-secondary hover:bg-bk-bg-light transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !url.trim()}
+            className="flex-1 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
+          >
+            {submitting ? "Adding..." : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PortfolioResult({
   result,
   editMode,
@@ -819,6 +880,7 @@ function PortfolioResult({
   onSaveSummary,
   onRegenerateClick,
   onSaveClick,
+  onAddTikTok,
 }: {
   result: GenerateResponse;
   editMode: boolean;
@@ -828,10 +890,12 @@ function PortfolioResult({
   onSaveSummary: (summary: string) => Promise<void>;
   onRegenerateClick: () => void;
   onSaveClick: () => Promise<void>;
+  onAddTikTok: (url: string) => Promise<void>;
 }) {
   const [filter, setFilter] = useState<"all" | "instagram" | "tiktok">("all");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>("default");
+  const [showAddTikTok, setShowAddTikTok] = useState(false);
   const [editingSummary, setEditingSummary] = useState(false);
   const [summaryDraft, setSummaryDraft] = useState(result.aiAnalysis.summary);
   const [savingSummary, setSavingSummary] = useState(false);
@@ -905,6 +969,14 @@ function PortfolioResult({
               <Check size={15} /> {savingPortfolio ? "Saving..." : "Save"}
             </button>
           )}
+          {!result.profiles.some((p) => p.platform === "tiktok") && (
+            <button
+              onClick={() => setShowAddTikTok(true)}
+              className="flex items-center gap-1.5 border border-bk-border text-bk-text-primary font-medium px-4 py-2 rounded-xl text-sm hover:bg-bk-bg-light transition-colors"
+            >
+              <FaTiktok /> Add TikTok
+            </button>
+          )}
           <button
             onClick={onRegenerateClick}
             className="flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
@@ -912,6 +984,16 @@ function PortfolioResult({
             <span>✦</span> Regenerate Portfolio by URL
           </button>
         </div>
+
+        {showAddTikTok && (
+          <AddTikTokModal
+            onClose={() => setShowAddTikTok(false)}
+            onSubmit={async (url) => {
+              await onAddTikTok(url);
+              setShowAddTikTok(false);
+            }}
+          />
+        )}
 
         {/* AI Summary */}
         <div className="bg-bk-bg border border-bk-border rounded-xl p-6 space-y-5">
@@ -3443,6 +3525,24 @@ export default function Home() {
     setTimeout(() => setSuccessMessage(null), 4000);
   };
 
+  const handleAddTikTok = async (ttUrl: string) => {
+    if (!result) return;
+    setError(null);
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tiktokUrl: ttUrl, portfolioId: result.id }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error ?? "Couldn't add TikTok. Please try again.");
+      return;
+    }
+    setResult(data);
+    setAbout(data.about ?? null);
+    setProfileOverrides(data.profileOverrides ?? null);
+  };
+
   useEffect(() => () => stopStepAnimation(), []);
 
   if (initializing) {
@@ -3530,6 +3630,7 @@ export default function Home() {
                   onReorder={handleReorder}
                   onSaveSummary={handleSaveSummary}
                   onSaveClick={handleSaveCreator}
+                  onAddTikTok={handleAddTikTok}
                   onRegenerateClick={() => {
                     setModalTargetId(activePortfolioId);
                     setPageState("modal");
