@@ -9,10 +9,11 @@ function igEngagement(p: RawData): number {
 }
 
 function ttEngagement(v: RawData): number {
+  const stats = (v.stats as RawData) ?? {};
   // weight: comments > likes > views (views are much higher volume)
-  return ((v.digg_count as number) ?? 0) +
-    ((v.comment_count as number) ?? 0) * 3 +
-    ((v.play_count as number) ?? 0) * 0.001;
+  return ((stats.diggCount as number) ?? 0) +
+    ((stats.commentCount as number) ?? 0) * 3 +
+    ((stats.playCount as number) ?? 0) * 0.001;
 }
 
 export function normalizeInstagram(raw: RawData): CreatorProfile {
@@ -69,9 +70,10 @@ export function stubProfile(platform: "youtube" | "other", url: string): Creator
   };
 }
 
-// Raw shape comes from lib/scraper.ts's scrapeTikTok (RapidAPI tiktok-scraper26):
-// { user, stats, posts }, where each post has TikTok's raw field names
-// (id, create_time, play_count, digg_count, comment_count, share_count).
+// Raw shape comes from lib/scraper.ts's scrapeTikTok (RapidAPI tiktok-scraper26),
+// verified against a live call: { user, stats, posts }, where each post has
+// { id, desc, stats: { diggCount, commentCount, playCount, shareCount }, video: { cover, originCover } }.
+// This endpoint doesn't expose a pinned-post flag, so isPinned is always false.
 export function normalizeTikTok(raw: RawData): CreatorProfile {
   const user = (raw.user as RawData) ?? {};
   const stats = (raw.stats as RawData) ?? {};
@@ -80,15 +82,16 @@ export function normalizeTikTok(raw: RawData): CreatorProfile {
 
   const recentPosts: CreatorPost[] = sorted.map((p) => {
     const video = (p.video as RawData) ?? {};
+    const postStats = (p.stats as RawData) ?? {};
     return {
       thumbnailUrl: (video.cover as string) ?? (video.originCover as string) ?? null,
       postUrl: p.id ? `https://www.tiktok.com/@${user.uniqueId}/video/${p.id}` : null,
-      likesCount: (p.digg_count as number) ?? 0,
-      commentsCount: (p.comment_count as number) ?? 0,
-      viewsCount: (p.play_count as number) ?? 0,
+      likesCount: (postStats.diggCount as number) ?? 0,
+      commentsCount: (postStats.commentCount as number) ?? 0,
+      viewsCount: (postStats.playCount as number) ?? 0,
       isVideo: true,
       caption: (p.desc as string) ?? "",
-      isPinned: Boolean(p.is_pinned ?? p.isPinned),
+      isPinned: false,
     };
   });
 

@@ -144,21 +144,23 @@ async function tiktokRapidApiFetch(path: string): Promise<Record<string, unknown
 export async function scrapeTikTok(url: string) {
   const username = extractTikTokUsername(url);
 
+  // Verified against the live API: response is { user, stats } directly, no
+  // extra "userInfo" wrapper.
   const userInfo = await tiktokRapidApiFetch(`/userinfo-by-username?username=${encodeURIComponent(username)}`);
-  const info = (userInfo.userInfo as Record<string, unknown>) ?? {};
-  const user = (info.user as Record<string, unknown>) ?? {};
-  const stats = (info.stats as Record<string, unknown>) ?? {};
+  const user = (userInfo.user as Record<string, unknown>) ?? {};
+  const stats = (userInfo.stats as Record<string, unknown>) ?? {};
 
   const secUid = user.secUid as string | undefined;
   if (!secUid) throw new TikTokScraperError("TikTok profile not found.", "not_found");
-  if (user.isSecret || user.privateAccount) {
+  if (user.secret || user.privateAccount) {
     throw new TikTokScraperError("This TikTok profile is private.", "private");
   }
 
+  // Verified: response is { data: { itemList: [...], cursor, hasMore } }.
   const postsData = await tiktokRapidApiFetch(
     `/user-posts?secUid=${encodeURIComponent(secUid)}&count=10&cursor=0`
   );
-  const posts = (postsData.data ?? postsData.itemList ?? postsData.aweme_list ?? []) as Record<string, unknown>[];
+  const posts = (((postsData.data as Record<string, unknown>)?.itemList as Record<string, unknown>[]) ?? []);
 
   return { user, stats, posts };
 }
