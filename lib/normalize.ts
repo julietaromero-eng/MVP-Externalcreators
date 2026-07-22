@@ -9,11 +9,10 @@ function igEngagement(p: RawData): number {
 }
 
 function ttEngagement(v: RawData): number {
-  const s = (v.stats as Record<string, number>) ?? {};
   // weight: comments > likes > views (views are much higher volume)
-  return (s.likeCount ?? (v.diggCount as number) ?? 0) +
-    (s.commentCount ?? 0) * 3 +
-    (s.playCount ?? 0) * 0.001;
+  return ((v.digg_count as number) ?? 0) +
+    ((v.comment_count as number) ?? 0) * 3 +
+    ((v.play_count as number) ?? 0) * 0.001;
 }
 
 export function normalizeInstagram(raw: RawData): CreatorProfile {
@@ -70,35 +69,39 @@ export function stubProfile(platform: "youtube" | "other", url: string): Creator
   };
 }
 
+// Raw shape comes from lib/scraper.ts's scrapeTikTok (RapidAPI tiktok-scraper26):
+// { user, stats, posts }, where each post has TikTok's raw field names
+// (id, create_time, play_count, digg_count, comment_count, share_count).
 export function normalizeTikTok(raw: RawData): CreatorProfile {
-  const rawVideos = (raw.videos as RawData[]) ?? [];
-  const sorted = [...rawVideos].sort((a, b) => ttEngagement(b) - ttEngagement(a)).slice(0, MAX_POSTS);
+  const user = (raw.user as RawData) ?? {};
+  const stats = (raw.stats as RawData) ?? {};
+  const rawPosts = (raw.posts as RawData[]) ?? [];
+  const sorted = [...rawPosts].sort((a, b) => ttEngagement(b) - ttEngagement(a)).slice(0, MAX_POSTS);
 
-  const recentPosts: CreatorPost[] = sorted.map((v) => {
-    const stats = (v.stats as Record<string, number>) ?? {};
-    const videoInfo = (v.video as RawData) ?? {};
+  const recentPosts: CreatorPost[] = sorted.map((p) => {
+    const video = (p.video as RawData) ?? {};
     return {
-      thumbnailUrl: (videoInfo.cover as string) ?? (videoInfo.originCover as string) ?? null,
-      postUrl: `https://www.tiktok.com/@${raw.uniqueId}/video/${v.id}`,
-      likesCount: stats.likeCount ?? (v.diggCount as number) ?? 0,
-      commentsCount: stats.commentCount ?? 0,
-      viewsCount: stats.playCount ?? 0,
+      thumbnailUrl: (video.cover as string) ?? (video.originCover as string) ?? null,
+      postUrl: p.id ? `https://www.tiktok.com/@${user.uniqueId}/video/${p.id}` : null,
+      likesCount: (p.digg_count as number) ?? 0,
+      commentsCount: (p.comment_count as number) ?? 0,
+      viewsCount: (p.play_count as number) ?? 0,
       isVideo: true,
-      caption: (v.desc as string) ?? "",
-      isPinned: Boolean(v.isPinned),
+      caption: (p.desc as string) ?? "",
+      isPinned: Boolean(p.is_pinned ?? p.isPinned),
     };
   });
 
   return {
     platform: "tiktok",
-    username: (raw.uniqueId as string) ?? "",
-    displayName: (raw.nickname as string) ?? (raw.uniqueId as string) ?? "",
-    bio: (raw.signature as string) ?? "",
-    followersCount: (raw.fans as number) ?? (raw.followerCount as number) ?? 0,
-    followingCount: (raw.following as number) ?? 0,
-    postsCount: (raw.video as number) ?? (raw.videoCount as number) ?? 0,
-    profilePicUrl: (raw.avatarMedium as string) ?? (raw.avatarLarger as string) ?? null,
-    totalLikes: (raw.heart as number) ?? (raw.heartCount as number) ?? 0,
+    username: (user.uniqueId as string) ?? "",
+    displayName: (user.nickname as string) ?? (user.uniqueId as string) ?? "",
+    bio: (user.signature as string) ?? "",
+    followersCount: (stats.followerCount as number) ?? 0,
+    followingCount: (stats.followingCount as number) ?? 0,
+    postsCount: (stats.videoCount as number) ?? 0,
+    profilePicUrl: (user.avatarLarger as string) ?? (user.avatarMedium as string) ?? null,
+    totalLikes: (stats.heartCount as number) ?? 0,
     recentPosts,
   };
 }

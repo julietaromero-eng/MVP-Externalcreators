@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error: isRateLimited
-            ? "Instagram is temporarily unstable (provider-side rate limit). Please try again in a few minutes."
+            ? "The scraping provider is temporarily rate-limited. Please try again in a few minutes."
             : "Couldn't fetch the profile information. Check that the URLs are correct and the profiles are public.",
         },
         { status: 422 }

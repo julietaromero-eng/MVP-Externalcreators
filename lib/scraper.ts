@@ -1,5 +1,3 @@
-import { ApifyClient } from "apify-client";
-
 function extractIgUsername(url: string): string {
   const trimmed = url.trim();
   const match = trimmed.match(/instagram\.com\/([^/?#]+)/);
@@ -100,19 +98,67 @@ export class NotImplementedScraperError extends Error {
   }
 }
 
-export async function scrapeTikTok(url: string) {
-  const client = new ApifyClient({ token: process.env.APIFY_TOKEN });
-  const username = extractTikTokUsername(url);
+// ─── TikTok (RapidAPI: tiktok-scraper26) ─────────────────────────────────
 
-  const run = await client.actor("clockworks/free-tiktok-scraper").call({
-    profiles: [`https://www.tiktok.com/@${username}`],
-    resultsType: "profiles",
-    resultsLimit: 1,
-    shouldDownloadVideos: false,
-    shouldDownloadCovers: false,
+export class TikTokScraperError extends Error {
+  constructor(
+    message: string,
+    public code: "not_found" | "private" | "rate_limited" | "unauthorized" | "unknown"
+  ) {
+    super(message);
+    this.name = "TikTokScraperError";
+  }
+}
+
+const TIKTOK_RAPIDAPI_HOST = "tiktok-scraper26.p.rapidapi.com";
+
+async function tiktokRapidApiFetch(path: string): Promise<Record<string, unknown>> {
+  const key = process.env.RAPIDAPI_TIKTOK_KEY;
+  if (!key) throw new Error("RAPIDAPI_TIKTOK_KEY not set");
+
+  const res = await fetch(`https://${TIKTOK_RAPIDAPI_HOST}${path}`, {
+    headers: { "x-rapidapi-host": TIKTOK_RAPIDAPI_HOST, "x-rapidapi-key": key },
   });
 
-  const { items } = await client.dataset(run.defaultDatasetId).listItems();
-  if (!items.length) throw new Error("No TikTok data returned");
-  return items[0] as Record<string, unknown>;
+  if (res.status === 429) {
+    throw new TikTokScraperError(
+      "TikTok RapidAPI rate limit (429) reached on the free plan — try again in a bit.",
+      "rate_limited"
+    );
+  }
+  if (res.status === 401 || res.status === 403) {
+    throw new TikTokScraperError(
+      "RAPIDAPI_TIKTOK_KEY is invalid, or the account isn't subscribed to tiktok-scraper26.",
+      "unauthorized"
+    );
+  }
+  if (res.status === 404) {
+    throw new TikTokScraperError("TikTok profile not found.", "not_found");
+  }
+  if (!res.ok) {
+    throw new TikTokScraperError(`TikTok RapidAPI request failed: ${res.status}`, "unknown");
+  }
+  return res.json();
+}
+
+export async function scrapeTikTok(url: string) {
+  const username = extractTikTokUsername(url);
+
+  const userInfo = await tiktokRapidApiFetch(`/userinfo-by-username?username=${encodeURIComponent(username)}`);
+  const info = (userInfo.userInfo as Record<string, unknown>) ?? {};
+  const user = (info.user as Record<string, unknown>) ?? {};
+  const stats = (info.stats as Record<string, unknown>) ?? {};
+
+  const secUid = user.secUid as string | undefined;
+  if (!secUid) throw new TikTokScraperError("TikTok profile not found.", "not_found");
+  if (user.isSecret || user.privateAccount) {
+    throw new TikTokScraperError("This TikTok profile is private.", "private");
+  }
+
+  const postsData = await tiktokRapidApiFetch(
+    `/user-posts?secUid=${encodeURIComponent(secUid)}&count=10&cursor=0`
+  );
+  const posts = (postsData.data ?? postsData.itemList ?? postsData.aweme_list ?? []) as Record<string, unknown>[];
+
+  return { user, stats, posts };
 }
