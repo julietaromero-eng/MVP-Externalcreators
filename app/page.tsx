@@ -14,8 +14,7 @@ import {
 } from "react-icons/fa6";
 import { BrkawayLogo } from "@/lib/BrkawayLogo";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
-import { COUNTRIES, COUNTRY_BY_CODE } from "@/lib/countries";
-import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary, CampaignCreatorSummary, CampaignGeo } from "@/lib/types";
+import type { GenerateResponse, CreatorProfile, CreatorPost, Platform, PortfolioAbout, SocialLinks, ProfileOverrides, PortfolioSummary, CampaignCreatorSummary } from "@/lib/types";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1995,88 +1994,6 @@ function AudienceAnalyticsTab({ result }: { result: GenerateResponse }) {
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────
 
-function CountrySelect({
-  value,
-  onChange,
-  allowAll = false,
-  className = "",
-}: {
-  value: CampaignGeo | "";
-  onChange: (code: string) => void;
-  allowAll?: boolean;
-  className?: string;
-}) {
-  const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selectedLabel = value === "" ? "All countries" : (COUNTRY_BY_CODE.get(value)?.name ?? value);
-
-  const normalizedQuery = normalizeSearch(query);
-  const filtered = normalizedQuery
-    ? COUNTRIES.filter(
-        (c) => normalizeSearch(c.name).includes(normalizedQuery) || c.code.toLowerCase().includes(normalizedQuery)
-      ).slice(0, 8)
-    : COUNTRIES.slice(0, 8);
-
-  const handleSelect = (code: string) => {
-    onChange(code);
-    setQuery("");
-    setOpen(false);
-  };
-
-  return (
-    <div className={`relative ${className}`} ref={containerRef}>
-      <input
-        value={open ? query : selectedLabel}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => {
-          setQuery("");
-          setOpen(true);
-        }}
-        placeholder="Search country..."
-        className="w-full px-2.5 py-1.5 rounded-lg border border-bk-border text-sm text-bk-text-primary focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-      />
-      {open && (
-        <div className="absolute z-20 top-full left-0 mt-1 w-56 max-h-64 overflow-y-auto bg-bk-bg border border-bk-border rounded-xl shadow-lg py-1">
-          {allowAll && (
-            <button
-              onClick={() => handleSelect("")}
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-bk-bg-light transition-colors text-bk-text-primary"
-            >
-              All countries
-            </button>
-          )}
-          {filtered.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-bk-text-muted">No matches</p>
-          ) : (
-            filtered.map((c) => (
-              <button
-                key={c.code}
-                onClick={() => handleSelect(c.code)}
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-bk-bg-light transition-colors text-bk-text-primary"
-              >
-                {c.name} <span className="text-bk-text-muted">({c.code})</span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function AddCreatorModal({
   savedCreators,
   existingIds,
@@ -2085,11 +2002,10 @@ function AddCreatorModal({
 }: {
   savedCreators: PortfolioSummary[];
   existingIds: Set<string>;
-  onConfirm: (portfolioIds: string[], geo: CampaignGeo) => Promise<void>;
+  onConfirm: (portfolioIds: string[]) => Promise<void>;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
-  const [geo, setGeo] = useState<CampaignGeo>("AR");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
@@ -2116,7 +2032,7 @@ function AddCreatorModal({
     if (selectedIds.size === 0) return;
     setSubmitting(true);
     try {
-      await onConfirm(Array.from(selectedIds), geo);
+      await onConfirm(Array.from(selectedIds));
     } finally {
       setSubmitting(false);
     }
@@ -2141,11 +2057,6 @@ function AddCreatorModal({
               className="w-full pl-8 pr-3 py-2 rounded-lg border border-bk-border text-sm focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
             />
           </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 bg-bk-bg-light rounded-xl px-3 py-2.5">
-          <span className="text-xs font-medium text-bk-text-secondary">Tag new adds as:</span>
-          <CountrySelect value={geo} onChange={setGeo} className="w-56" />
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-1 -mx-2 px-2">
@@ -2229,8 +2140,8 @@ function MetricsEmptyState({ onAddCreator }: { onAddCreator: () => void }) {
         <div>
           <h2 className="text-lg font-bold text-bk-text-primary">Build your campaign roster</h2>
           <p className="text-sm text-bk-text-secondary mt-1">
-            Add the creators you&apos;re planning to work with. Once you do, you&apos;ll be able to filter by geo,
-            platform, and content type, and see estimated reach and engagement across the whole roster.
+            Add the creators you&apos;re planning to work with. Once you do, you&apos;ll be able to filter by
+            platform and content type, and see estimated reach and engagement across the whole roster.
           </p>
         </div>
         <button
@@ -2300,13 +2211,19 @@ function FiltersMenu({
   );
 }
 
+const PLATFORM_LABELS: Record<Platform, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  other: "Other",
+};
+
 interface CreatorPlatformStat {
   portfolioId: string;
   displayName: string;
   username: string;
   profilePicUrl: string | null;
   platform: Platform;
-  geo: CampaignGeo;
   avgReach: number;
   avgRate: number;
   isEstimated: boolean;
@@ -2322,7 +2239,6 @@ function MetricsView() {
   const [postsToAnalyze, setPostsToAnalyze] = useState(10);
   const [organicOnly, setOrganicOnly] = useState(true);
   const [excludePinned, setExcludePinned] = useState(true);
-  const [geoFilter, setGeoFilter] = useState<CampaignGeo | "">("");
   const [platformFilter, setPlatformFilter] = useState<"all" | Platform>("all");
 
   const [showAddCreator, setShowAddCreator] = useState(false);
@@ -2363,7 +2279,7 @@ function MetricsView() {
       .catch(() => {});
   };
 
-  const handleConfirmAddCreators = async (portfolioIds: string[], geo: CampaignGeo) => {
+  const handleConfirmAddCreators = async (portfolioIds: string[]) => {
     setShowAddCreator(false);
     setError(null);
     const results = await Promise.allSettled(
@@ -2371,7 +2287,7 @@ function MetricsView() {
         fetch("/api/metrics/creators", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ portfolioId, geo }),
+          body: JSON.stringify({ portfolioId }),
         }).then((res) => {
           if (!res.ok) throw new Error();
         })
@@ -2418,7 +2334,6 @@ function MetricsView() {
             username: entry.username,
             profilePicUrl: entry.profilePicUrl,
             platform: profile.platform,
-            geo: entry.geo,
             avgReach: 0,
             avgRate: 0,
             isEstimated: profile.platform === "instagram",
@@ -2435,7 +2350,6 @@ function MetricsView() {
           username: entry.username,
           profilePicUrl: entry.profilePicUrl,
           platform: profile.platform,
-          geo: entry.geo,
           avgReach,
           avgRate,
           isEstimated,
@@ -2444,30 +2358,29 @@ function MetricsView() {
       });
   });
 
-  const filteredStats = stats.filter((s) => geoFilter === "" || s.geo === geoFilter);
+  const filteredStats = stats;
   const totalReach = filteredStats.reduce((s, x) => s + x.avgReach, 0);
-  const distinctGeos = Array.from(new Set(filteredStats.map((s) => s.geo))).sort();
-  const breakdown = distinctGeos.map((geo) => {
-    const cellStats = filteredStats.filter((s) => s.geo === geo);
+  const distinctPlatforms = Array.from(new Set(filteredStats.map((s) => s.platform))).sort();
+  const breakdown = distinctPlatforms.map((platform) => {
+    const cellStats = filteredStats.filter((s) => s.platform === platform);
     return {
-      geo,
+      platform,
       count: new Set(cellStats.map((s) => s.portfolioId)).size,
       reach: cellStats.reduce((s, x) => s + x.avgReach, 0),
     };
   });
 
   const handleExport = () => {
-    const headers = ["Creator", "Username", "Platform", "Geo", "Avg Reach/Video", "Avg ER (%)", "Posts analyzed"];
+    const headers = ["Creator", "Username", "Platform", "Avg Reach/Video", "Avg ER (%)", "Posts analyzed"];
     const rows = filteredStats.map((s) => [
       s.displayName,
       s.username,
       s.platform,
-      COUNTRY_BY_CODE.get(s.geo)?.name ?? s.geo,
       Math.round(s.avgReach).toString(),
       s.avgRate.toFixed(2),
       s.postsAnalyzed.toString(),
     ]);
-    rows.push(["", "", "", "Total Potential Reach", Math.round(totalReach).toString(), "", ""]);
+    rows.push(["", "", "Total Potential Reach", Math.round(totalReach).toString(), "", ""]);
     const csv = [headers, ...rows]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
       .join("\n");
@@ -2507,18 +2420,21 @@ function MetricsView() {
         <div className="flex flex-wrap items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-4">
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-bk-text-secondary whitespace-nowrap">Posts to analyze</label>
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={postsToAnalyze}
-              onChange={(e) => setPostsToAnalyze(Math.min(20, Math.max(1, Number(e.target.value) || 1)))}
-              className="w-16 px-2 py-1.5 rounded-lg border border-bk-border text-sm text-center focus:outline-none focus:ring-2 focus:ring-bk-purple/30 focus:border-bk-purple"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-bk-text-secondary whitespace-nowrap">Geo</label>
-            <CountrySelect value={geoFilter} onChange={setGeoFilter} allowAll className="w-48" />
+            <div className="flex items-center gap-0.5 bg-bk-bg-light rounded-lg p-0.5">
+              {[10, 20].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setPostsToAnalyze(n)}
+                  className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                    postsToAnalyze === n
+                      ? "bg-bk-bg text-bk-purple shadow-sm"
+                      : "text-bk-text-secondary hover:text-bk-text-primary"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <label className="text-xs font-semibold text-bk-text-secondary whitespace-nowrap">Platform</label>
@@ -2564,15 +2480,15 @@ function MetricsView() {
             <p className="text-[11px] text-white/70">Sum of each creator&apos;s avg. reach per video</p>
           </div>
           <div className="col-span-2 bg-bk-bg border border-bk-border rounded-xl p-4">
-            <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-3">Breakdown by Geo</p>
+            <p className="text-xs font-semibold text-bk-text-muted uppercase tracking-wider mb-3">Breakdown by Platform</p>
             {breakdown.length === 0 ? (
               <p className="text-sm text-bk-text-muted">No creators to break down yet.</p>
             ) : (
               <div className="grid grid-cols-4 gap-3">
                 {breakdown.map((cell) => (
-                  <div key={cell.geo} className="bg-bk-bg-light rounded-lg p-3">
+                  <div key={cell.platform} className="bg-bk-bg-light rounded-lg p-3">
                     <p className="text-[10px] font-semibold text-bk-text-muted uppercase">
-                      {COUNTRY_BY_CODE.get(cell.geo)?.name ?? cell.geo}
+                      {PLATFORM_LABELS[cell.platform]}
                     </p>
                     <p className="text-lg font-bold text-bk-text-primary">{fmt(Math.round(cell.reach))}</p>
                     <p className="text-[11px] text-bk-text-muted">{cell.count} creator{cell.count === 1 ? "" : "s"}</p>
@@ -2587,14 +2503,13 @@ function MetricsView() {
         <div className="bg-bk-bg border border-bk-border rounded-xl overflow-hidden">
           {filteredStats.length === 0 ? (
             <p className="text-sm text-bk-text-muted text-center py-12">
-              No creators match the current Geo/Platform filters.
+              No creators match the current Platform filter.
             </p>
           ) : (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-bk-border text-left text-xs font-semibold text-bk-text-muted uppercase tracking-wider">
                   <th className="px-4 py-3">Creator</th>
-                  <th className="px-4 py-3">Geo</th>
                   <th className="px-4 py-3">Avg. Reach/Video</th>
                   <th className="px-4 py-3">Avg. ER</th>
                   <th className="px-4 py-3">Posts analyzed</th>
@@ -2613,11 +2528,10 @@ function MetricsView() {
                         )}
                         <div className="min-w-0">
                           <p className="font-medium text-bk-text-primary truncate">{s.displayName}</p>
-                          <p className="text-xs text-bk-text-muted truncate">@{s.username} · {s.platform === "instagram" ? "Instagram" : "TikTok"}</p>
+                          <p className="text-xs text-bk-text-muted truncate">@{s.username} · {PLATFORM_LABELS[s.platform]}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-bk-text-secondary">{COUNTRY_BY_CODE.get(s.geo)?.name ?? s.geo}</td>
                     <td className="px-4 py-3 font-semibold text-bk-text-primary">
                       {fmt(Math.round(s.avgReach))}{s.isEstimated ? "~" : ""}
                     </td>

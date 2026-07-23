@@ -3,7 +3,6 @@ import type {
   AIAnalysis,
   BookingLinks,
   CampaignCreatorSummary,
-  CampaignGeo,
   CreatorPost,
   CreatorProfile,
   Platform,
@@ -561,11 +560,11 @@ export async function replacePostMedia(
   return postRowToCreatorPost(data);
 }
 
-export async function addCampaignCreator(portfolioId: string, geo: CampaignGeo): Promise<void> {
+export async function addCampaignCreator(portfolioId: string): Promise<void> {
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("campaign_creators")
-    .upsert({ portfolio_id: portfolioId, geo }, { onConflict: "portfolio_id" });
+    .upsert({ portfolio_id: portfolioId }, { onConflict: "portfolio_id" });
   if (error) throw error;
 }
 
@@ -580,7 +579,7 @@ export async function listCampaignCreators(): Promise<CampaignCreatorSummary[]> 
 
   const { data: rosterRows, error: rosterError } = await supabase
     .from("campaign_creators")
-    .select("portfolio_id, geo")
+    .select("portfolio_id")
     .order("added_at", { ascending: true });
   if (rosterError) throw rosterError;
   if (!rosterRows || rosterRows.length === 0) return [];
@@ -625,7 +624,6 @@ export async function listCampaignCreators(): Promise<CampaignCreatorSummary[]> 
         profilePicUrl: (portfolio.profile_pic_url as string) || (primary?.profile_pic_url as string) || null,
         platforms: profiles.map((p) => p.platform as Platform),
         generatedAt: (portfolio.generated_at as string) ?? null,
-        geo: roster.geo as CampaignGeo,
       };
     })
     .filter((x): x is CampaignCreatorSummary => x !== null);
