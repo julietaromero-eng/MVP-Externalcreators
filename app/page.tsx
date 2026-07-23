@@ -2080,17 +2080,18 @@ function CountrySelect({
 function AddCreatorModal({
   savedCreators,
   existingIds,
-  onAdd,
+  onConfirm,
   onClose,
 }: {
   savedCreators: PortfolioSummary[];
   existingIds: Set<string>;
-  onAdd: (portfolioId: string, geo: CampaignGeo) => Promise<void>;
+  onConfirm: (portfolioIds: string[], geo: CampaignGeo) => Promise<void>;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [geo, setGeo] = useState<CampaignGeo>("AR");
-  const [addingId, setAddingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
 
   const normalizedSearch = normalizeSearch(search);
   const filtered = savedCreators.filter((c) => {
@@ -2102,12 +2103,22 @@ function AddCreatorModal({
     );
   });
 
-  const handleAdd = async (id: string) => {
-    setAddingId(id);
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleConfirm = async () => {
+    if (selectedIds.size === 0) return;
+    setSubmitting(true);
     try {
-      await onAdd(id, geo);
+      await onConfirm(Array.from(selectedIds), geo);
     } finally {
-      setAddingId(null);
+      setSubmitting(false);
     }
   };
 
@@ -2137,34 +2148,97 @@ function AddCreatorModal({
           <CountrySelect value={geo} onChange={setGeo} className="w-56" />
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-1.5 -mx-2 px-2">
+        <div className="flex-1 overflow-y-auto space-y-1 -mx-2 px-2">
           {filtered.length === 0 ? (
             <p className="text-sm text-bk-text-muted text-center py-8">
               {savedCreators.length === 0 ? "No saved creators yet." : "No results, or all matches are already in the campaign."}
             </p>
           ) : (
-            filtered.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-bk-bg-light transition-colors">
-                {c.profilePicUrl ? (
-                  <Image src={c.profilePicUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-bk-purple-light flex-shrink-0" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-bk-text-primary truncate">{c.displayName}</p>
-                  <p className="text-xs text-bk-text-muted truncate">@{c.username}</p>
-                </div>
-                <button
-                  onClick={() => handleAdd(c.id)}
-                  disabled={addingId === c.id}
-                  className="text-xs font-semibold bg-bk-purple text-white px-3 py-1.5 rounded-lg hover:bg-bk-purple-dark transition-colors disabled:opacity-50 flex-shrink-0"
+            filtered.map((c) => {
+              const checked = selectedIds.has(c.id);
+              return (
+                <label
+                  key={c.id}
+                  className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-bk-bg-light transition-colors cursor-pointer select-none"
                 >
-                  {addingId === c.id ? "Adding..." : "Add"}
-                </button>
-              </div>
-            ))
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleSelected(c.id)}
+                    className="accent-bk-purple flex-shrink-0"
+                  />
+                  {c.profilePicUrl ? (
+                    <Image src={c.profilePicUrl} alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full bg-bk-purple-light flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-bk-text-primary truncate">{c.displayName}</p>
+                    <p className="text-xs text-bk-text-muted truncate">@{c.username}</p>
+                  </div>
+                </label>
+              );
+            })
           )}
         </div>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 py-2.5 border border-bk-border rounded-xl text-sm text-bk-text-secondary hover:bg-bk-bg-light transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={submitting || selectedIds.size === 0}
+            className="flex-1 py-2.5 bg-bk-purple text-white font-semibold rounded-xl text-sm hover:bg-bk-purple-dark transition-colors disabled:opacity-50"
+          >
+            {submitting
+              ? "Adding..."
+              : selectedIds.size === 0
+                ? "Select creators"
+                : `Add ${selectedIds.size} creator${selectedIds.size === 1 ? "" : "s"}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricsLoadingState() {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="bg-bk-bg border border-bk-border rounded-2xl px-10 py-8 text-center space-y-3">
+        <Loader2 size={32} className="text-bk-purple animate-spin mx-auto" />
+        <p className="text-sm font-semibold text-bk-text-primary">Generating your dashboard...</p>
+        <p className="text-xs text-bk-text-muted">Pulling posts and computing reach across your roster.</p>
+      </div>
+    </div>
+  );
+}
+
+function MetricsEmptyState({ onAddCreator }: { onAddCreator: () => void }) {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="text-center max-w-md space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-bk-purple-light flex items-center justify-center mx-auto">
+          <BarChart3 size={24} className="text-bk-purple" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-bk-text-primary">Build your campaign roster</h2>
+          <p className="text-sm text-bk-text-secondary mt-1">
+            Add the creators you&apos;re planning to work with. Once you do, you&apos;ll be able to filter by geo,
+            platform, and content type, and see estimated reach and engagement across the whole roster.
+          </p>
+        </div>
+        <button
+          onClick={onAddCreator}
+          className="inline-flex items-center gap-1.5 bg-bk-purple text-white font-semibold px-4 py-2.5 rounded-xl text-sm hover:bg-bk-purple-dark transition-colors"
+        >
+          <UserSearch size={14} /> Add Creator
+        </button>
       </div>
     </div>
   );
@@ -2289,15 +2363,22 @@ function MetricsView() {
       .catch(() => {});
   };
 
-  const handleAddCreator = async (portfolioId: string, geo: CampaignGeo) => {
-    const res = await fetch("/api/metrics/creators", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ portfolioId, geo }),
-    });
-    if (!res.ok) {
-      setError("Couldn't add the creator. Please try again.");
-      return;
+  const handleConfirmAddCreators = async (portfolioIds: string[], geo: CampaignGeo) => {
+    setShowAddCreator(false);
+    setError(null);
+    const results = await Promise.allSettled(
+      portfolioIds.map((portfolioId) =>
+        fetch("/api/metrics/creators", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ portfolioId, geo }),
+        }).then((res) => {
+          if (!res.ok) throw new Error();
+        })
+      )
+    );
+    if (results.some((r) => r.status === "rejected")) {
+      setError("Couldn't add one or more creators. Please try again.");
     }
     loadRoster();
   };
@@ -2416,6 +2497,11 @@ function MetricsView() {
         </div>
       )}
 
+      {loading ? (
+        <MetricsLoadingState />
+      ) : roster.length === 0 ? (
+        <MetricsEmptyState onAddCreator={openAddCreator} />
+      ) : (
       <div className="flex-1 overflow-y-auto p-8 space-y-6">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3 bg-bk-bg border border-bk-border rounded-xl p-4">
@@ -2499,15 +2585,9 @@ function MetricsView() {
 
         {/* Roster table */}
         <div className="bg-bk-bg border border-bk-border rounded-xl overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 size={24} className="text-bk-purple animate-spin" />
-            </div>
-          ) : filteredStats.length === 0 ? (
+          {filteredStats.length === 0 ? (
             <p className="text-sm text-bk-text-muted text-center py-12">
-              {roster.length === 0
-                ? "No creators in this campaign yet. Add one above."
-                : "No creators match the current Geo filter."}
+              No creators match the current Geo/Platform filters.
             </p>
           ) : (
             <table className="w-full text-sm">
@@ -2559,12 +2639,13 @@ function MetricsView() {
           )}
         </div>
       </div>
+      )}
 
       {showAddCreator && (
         <AddCreatorModal
           savedCreators={savedCreators}
           existingIds={new Set(roster.map((c) => c.id))}
-          onAdd={handleAddCreator}
+          onConfirm={handleConfirmAddCreators}
           onClose={() => setShowAddCreator(false)}
         />
       )}
