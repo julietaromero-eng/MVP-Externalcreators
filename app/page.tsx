@@ -1877,7 +1877,7 @@ function computeEngagement(
   post: CreatorPost,
   profile: CreatorProfile
 ): { rate: number; reach: number; isEstimated: boolean } {
-  const interactions = post.likesCount + post.commentsCount;
+  const interactions = post.likesCount + post.commentsCount + (post.sharesCount ?? 0);
   const isEstimated = !post.viewsCount || post.viewsCount <= 0;
   const reach = isEstimated ? estimatedInstagramReach(profile.followersCount) : (post.viewsCount as number);
   const rate = reach ? (interactions / reach) * 100 : 0;

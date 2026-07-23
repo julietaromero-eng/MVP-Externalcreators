@@ -8,6 +8,7 @@ export interface CreatorPost {
   postUrl: string | null;
   likesCount: number;
   commentsCount: number;
+  sharesCount?: number;
   viewsCount?: number;
   isVideo?: boolean;
   videoUrl?: string | null;
